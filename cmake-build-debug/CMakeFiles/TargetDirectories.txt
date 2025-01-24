@@ -1,0 +1,3 @@
+/Users/zhengtaojun/Desktop/NUS/XFC4101/3dStamFluid/cmake-build-debug/CMakeFiles/3dStamFluid.dir
+/Users/zhengtaojun/Desktop/NUS/XFC4101/3dStamFluid/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/zhengtaojun/Desktop/NUS/XFC4101/3dStamFluid/cmake-build-debug/CMakeFiles/rebuild_cache.dir
