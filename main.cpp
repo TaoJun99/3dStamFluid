@@ -9,6 +9,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+const int GRID_SIZE = 64;
+
+GLuint dyeTexture;
 GLuint VAO, VBO, EBO;
 GLuint shaderProgram;
 
@@ -172,6 +175,48 @@ int main() {
 
     glEnable(GL_DEPTH_TEST);
 
+    GLint maxTextureSize;
+    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &maxTextureSize);
+    std::cout << "Max 3D Texture Size: " << maxTextureSize << std::endl;
+
+    // Create textures
+    GLfloat zeroData[GRID_SIZE * GRID_SIZE * GRID_SIZE * 4] = {0.0f};
+
+    // Modify specific elements (optional)
+    for (int k = 0; k < GRID_SIZE; ++k) {
+        for (int j = 0; j < GRID_SIZE; ++j) {
+            for (int i = 0; i < GRID_SIZE; ++i) {
+                int index = k * GRID_SIZE * GRID_SIZE + j * GRID_SIZE + i;
+                // You can modify the values here if needed
+                zeroData[index * 4 + 0] = 1.0f; // Set R to 1.0f, for example
+                zeroData[index * 4 + 1] = 0.0f; // G component
+                zeroData[index * 4 + 2] = 0.0f; // B component
+                zeroData[index * 4 + 3] = 1.0f; // A component
+            }
+        }
+    }
+
+//    glActiveTexture(GL_TEXTURE0);
+//    glGenTextures(1, &dyeTexture);
+//    glBindTexture(GL_TEXTURE_2D, dyeTexture);
+//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE * GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glActiveTexture(GL_TEXTURE0);
+    glGenTextures(1, &dyeTexture);
+    glBindTexture(GL_TEXTURE_3D, dyeTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+
+
 // Set up transformations
     glm::mat4 model = glm::mat4(1.0f); // Identity matrix
     glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f)); // Camera back by 5 units
@@ -180,13 +225,26 @@ int main() {
 // Use the shader program
     glUseProgram(shaderProgram);
 
-    // Send matrices to the shader
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        std::cerr << "OpenGL error: " << err << std::endl;
+    }
+
+    // Uniform variables
     GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
     GLuint viewLoc = glGetUniformLocation(shaderProgram, "view");
     GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
+    GLuint inputTextureLoc = glGetUniformLocation(shaderProgram, "inputTexture");
+    GLuint fluidSizeLoc = glGetUniformLocation(shaderProgram, "fluidSize");
+    GLuint gridSizeLoc = glGetUniformLocation(shaderProgram, "gridSize");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
     glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform1i(inputTextureLoc, 0);
+    glUniform1f(fluidSizeLoc, cubeSize);
+    glUniform1i(gridSizeLoc, GRID_SIZE);
+
+
 
     // Render loop
     while (!glfwWindowShouldClose(window)) {
@@ -209,6 +267,7 @@ int main() {
     }
 
     // Cleanup
+    glDeleteTextures(1, &dyeTexture);
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
