@@ -12,8 +12,31 @@
 const int GRID_SIZE = 64;
 
 GLuint dyeTexture;
+GLuint velocityTexture;
 GLuint VAO, VBO, EBO;
+GLuint quadVAO, quadVBO, quadEBO;
+GLuint framebuffer;
 GLuint shaderProgram;
+GLuint applyForceShaderProgram;
+
+float cubeSize = 1.0f;
+
+glm::mat4 model = glm::mat4(1.0f); // Identity matrix
+glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, -3.0f)); // Camera back by 3 units
+glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 800.0f, 0.1f, 100.0f); // Perspective
+
+// Fullscreen Quad Vertices
+float quadVertices[] = {
+        -1.0f, -1.0f,
+        1.0f, -1.0f,
+        1.0f,  1.0f,
+        -1.0f,  1.0f
+};
+
+unsigned int quadIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+};
 
 // Function to read shader source from file
 std::string readShaderSource(const std::string& filePath) {
@@ -72,49 +95,176 @@ GLuint createShaderProgram(const std::string& vertexPath, const std::string& fra
 }
 
 // Function to generate cube vertices based on a size variable
-void generateCubeVertices(float size, std::vector<float>& vertices) {
-    float halfSize = size / 2.0f;
+void generateCubeVertices(std::vector<float>& vertices) {
+    float halfSize = cubeSize / 2.0f;
 
     vertices = {
-            // Positions for each vertex of the cube
             // Front face
-            -halfSize, -halfSize,  halfSize, // 0
-            halfSize, -halfSize,  halfSize, // 1
-            halfSize,  halfSize,  halfSize, // 2
-            -halfSize,  halfSize,  halfSize, // 3
+            -halfSize, -halfSize,  halfSize,  0.0f, 0.0f, 1.0f, // 0
+            halfSize, -halfSize,  halfSize,  1.0f, 0.0f, 1.0f, // 1
+            halfSize,  halfSize,  halfSize,  1.0f, 1.0f, 1.0f, // 2
+            -halfSize,  halfSize,  halfSize,  0.0f, 1.0f, 1.0f, // 3
 
             // Back face
-            -halfSize, -halfSize, -halfSize, // 4
-            halfSize, -halfSize, -halfSize, // 5
-            halfSize,  halfSize, -halfSize, // 6
-            -halfSize,  halfSize, -halfSize, // 7
+            -halfSize, -halfSize, -halfSize,  0.0f, 0.0f, 0.0f, // 4
+            halfSize, -halfSize, -halfSize,  1.0f, 0.0f, 0.0f, // 5
+            halfSize,  halfSize, -halfSize,  1.0f, 1.0f, 0.0f, // 6
+            -halfSize,  halfSize, -halfSize,  0.0f, 1.0f, 0.0f, // 7
 
             // Left face
-            -halfSize, -halfSize, -halfSize, // 8
-            -halfSize, -halfSize,  halfSize, // 9
-            -halfSize,  halfSize,  halfSize, // 10
-            -halfSize,  halfSize, -halfSize, // 11
+            -halfSize, -halfSize, -halfSize,  0.0f, 0.0f, 0.0f, // 8
+            -halfSize, -halfSize,  halfSize,  0.0f, 0.0f, 1.0f, // 9
+            -halfSize,  halfSize,  halfSize,  0.0f, 1.0f, 1.0f, // 10
+            -halfSize,  halfSize, -halfSize,  0.0f, 1.0f, 0.0f, // 11
 
             // Right face
-            halfSize, -halfSize, -halfSize, // 12
-            halfSize, -halfSize,  halfSize, // 13
-            halfSize,  halfSize,  halfSize, // 14
-            halfSize,  halfSize, -halfSize, // 15
+            halfSize, -halfSize, -halfSize,  1.0f, 0.0f, 0.0f, // 12
+            halfSize, -halfSize,  halfSize,  1.0f, 0.0f, 1.0f, // 13
+            halfSize,  halfSize,  halfSize,  1.0f, 1.0f, 1.0f, // 14
+            halfSize,  halfSize, -halfSize,  1.0f, 1.0f, 0.0f, // 15
 
             // Bottom face
-            -halfSize, -halfSize, -halfSize, // 16
-            halfSize, -halfSize, -halfSize, // 17
-            halfSize, -halfSize,  halfSize, // 18
-            -halfSize, -halfSize,  halfSize, // 19
+            -halfSize, -halfSize, -halfSize,  0.0f, 0.0f, 0.0f, // 16
+            halfSize, -halfSize, -halfSize,  1.0f, 0.0f, 0.0f, // 17
+            halfSize, -halfSize,  halfSize,  1.0f, 0.0f, 1.0f, // 18
+            -halfSize, -halfSize,  halfSize,  0.0f, 0.0f, 1.0f, // 19
 
             // Top face
-            -halfSize,  halfSize, -halfSize, // 20
-            halfSize,  halfSize, -halfSize, // 21
-            halfSize,  halfSize,  halfSize, // 22
-            -halfSize,  halfSize,  halfSize  // 23
+            -halfSize,  halfSize, -halfSize,  0.0f, 1.0f, 0.0f, // 20
+            halfSize,  halfSize, -halfSize,  1.0f, 1.0f, 0.0f, // 21
+            halfSize,  halfSize,  halfSize,  1.0f, 1.0f, 1.0f, // 22
+            -halfSize,  halfSize,  halfSize,  0.0f, 1.0f, 1.0f  // 23
     };
 }
 
+void getMouseNDC(GLFWwindow* window, glm::vec2& mouseNDC) {
+    double mouseX, mouseY;
+    glfwGetCursorPos(window, &mouseX, &mouseY);
+
+    int windowWidth, windowHeight;
+    glfwGetWindowSize(window, &windowWidth, &windowHeight);
+
+    mouseNDC.x = (2.0f * static_cast<float>(mouseX) / windowWidth) - 1.0f;
+    mouseNDC.y = 1.0f - (2.0f * static_cast<float>(mouseY) / windowHeight);
+}
+
+glm::vec3 computeForcePosition(const glm::vec2& mouseNDC) {
+    glm::mat4 invVP = glm::inverse(projection * view);
+
+    // Create a ray in NDC space (near and far plane points)
+    glm::vec4 nearPoint = invVP * glm::vec4(mouseNDC, -1.0f, 1.0f);
+    glm::vec4 farPoint = invVP * glm::vec4(mouseNDC, 1.0f, 1.0f);
+
+    // Divide by w to convert to world coordinates
+    nearPoint /= nearPoint.w;
+    farPoint /= farPoint.w;
+
+    glm::vec3 rayOrigin = glm::vec3(nearPoint);
+    glm::vec3 rayDirection = glm::normalize(glm::vec3(farPoint) - rayOrigin);
+
+    // Check if ray is parallel to the top face (y = halfSize)
+    if (glm::abs(rayDirection.y) < 1e-6f) {
+        return glm::vec3(-1, -1, -1); // No intersection
+    }
+
+    float halfSize = cubeSize / 2;
+    // Compute t for the intersection with the top plane (y = halfSize)
+    float t = (halfSize - rayOrigin.y) / rayDirection.y;
+
+    // If t < 0, intersection is behind the camera
+    if (t < 0) {
+        return glm::vec3(-1, -1, -1);
+    }
+
+    // Compute the intersection point
+    glm::vec3 intersection = rayOrigin + t * rayDirection;
+
+    // Check if the intersection point is within the bounds of the top face
+    if (intersection.x < -halfSize || intersection.x > halfSize ||
+        intersection.z < -halfSize || intersection.z > halfSize) {
+        return glm::vec3(-1, -1, -1); // Outside the top face bounds
+    }
+
+    // If intersect: intersection point -halfSize <= x,z <= halfSize, y = halfSize
+    // Map intersection point to normalized grid space (0 to 1 range)
+    glm::vec3 normalizedPoint = (intersection + glm::vec3(halfSize)) / (2.0f * halfSize);
+    return normalizedPoint;
+}
+
+
+void applyForce(GLFWwindow* window) {
+    glm::vec2 mouseNDC;
+    getMouseNDC(window, mouseNDC);
+
+    // World space
+    glm::vec3 forcePos = computeForcePosition(mouseNDC);
+
+    // No intersection with top face
+    if (forcePos == glm::vec3(-1, -1, -1)) {
+        return;
+    }
+
+
+    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
+    float forceRadius = 1.2f; // Normalized
+    float forceStrength = 5.0f; // Example strength
+
+    // Use the applyForceShaderProgram
+    glUseProgram(applyForceShaderProgram);
+
+    // Uniform variables
+    GLuint forceApplyPosLoc = glGetUniformLocation(applyForceShaderProgram, "forceApplyPos");
+    GLuint forceDirLoc = glGetUniformLocation(applyForceShaderProgram, "forceDir");
+    GLuint forceRadiusLoc = glGetUniformLocation(applyForceShaderProgram, "forceRadius");
+    GLuint forceStrengthLoc = glGetUniformLocation(applyForceShaderProgram, "forceStrength");
+    GLuint velocityTextureLoc = glGetUniformLocation(applyForceShaderProgram, "velocityTexture");
+
+    glUniform3fv(forceApplyPosLoc, 1, glm::value_ptr(forcePos));
+    glUniform3fv(forceDirLoc, 1, glm::value_ptr(forceDir));
+    glUniform1f(forceRadiusLoc, forceRadius);
+    glUniform1f(forceStrengthLoc, forceStrength);
+    glUniform1i(velocityTextureLoc, 1);
+
+    // Bind the 3D texture as the framebuffer target
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, velocityTexture);
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+        // Bind each slice (slice) of the 3D texture
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
+        // Check framebuffer status
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+            break;
+        }
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+//        unsigned char* pixels = new unsigned char[GRID_SIZE * GRID_SIZE * 3];  // 3 bytes for RGB
+//
+//        glReadPixels(0, 0, GRID_SIZE, GRID_SIZE, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+//
+//        std::cout << "First pixel (RGB): "
+//                  << (int)pixels[0] << ", "
+//                  << (int)pixels[1] << ", "
+//                  << (int)pixels[2] << std::endl;
+//
+//        delete[] pixels;
+
+        std::cout << "Apply slice " << std::endl;
+    }
+
+
+
+    // Unbind the framebuffer and texture
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+}
 
 
 int main() {
@@ -139,10 +289,11 @@ int main() {
     glewInit();
 
     shaderProgram = createShaderProgram("../shader.vert", "../shader.frag");
+    applyForceShaderProgram = createShaderProgram("../quadShader.vert", "../applyForce.frag");
 
-    float cubeSize = 1.0f;
+
     std::vector<float> cubeVertices;
-    generateCubeVertices(cubeSize, cubeVertices);
+    generateCubeVertices(cubeVertices);
 
     // Indices for drawing the cube with EBO
     std::vector<unsigned int> cubeIndices = {
@@ -155,6 +306,7 @@ int main() {
     };
 
     // Create VAO, VBO, EBO
+    // Cube vertices
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
@@ -167,17 +319,41 @@ int main() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, cubeIndices.size() * sizeof(unsigned int), cubeIndices.data(), GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);           // Position
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float))); // Texture coordinate
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    // Full screen quad for texture update
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glGenBuffers(1, &quadEBO);
+
+    glBindVertexArray(quadVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(quadIndices), quadIndices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    glEnable(GL_DEPTH_TEST);
+//    glEnable(GL_DEPTH_TEST);
 
-    GLint maxTextureSize;
-    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &maxTextureSize);
-    std::cout << "Max 3D Texture Size: " << maxTextureSize << std::endl;
+    glGenFramebuffers(1, &framebuffer);
+
+//    GLint maxTextureSize;
+//    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &maxTextureSize);
+//    std::cout << "Max 3D Texture Size: " << maxTextureSize << std::endl;
 
     // Create textures
     GLfloat zeroData[GRID_SIZE * GRID_SIZE * GRID_SIZE * 4] = {0.0f};
@@ -196,14 +372,6 @@ int main() {
         }
     }
 
-//    glActiveTexture(GL_TEXTURE0);
-//    glGenTextures(1, &dyeTexture);
-//    glBindTexture(GL_TEXTURE_2D, dyeTexture);
-//    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE * GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-//    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
     glActiveTexture(GL_TEXTURE0);
     glGenTextures(1, &dyeTexture);
@@ -215,34 +383,15 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-
-
-// Set up transformations
-    glm::mat4 model = glm::mat4(1.0f); // Identity matrix
-    glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -5.0f)); // Camera back by 5 units
-    glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 800.0f, 0.1f, 100.0f); // Perspective
-
-// Use the shader program
-    glUseProgram(shaderProgram);
-
-    GLenum err;
-    while ((err = glGetError()) != GL_NO_ERROR) {
-        std::cerr << "OpenGL error: " << err << std::endl;
-    }
-
-    // Uniform variables
-    GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
-    GLuint viewLoc = glGetUniformLocation(shaderProgram, "view");
-    GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
-    GLuint inputTextureLoc = glGetUniformLocation(shaderProgram, "inputTexture");
-    GLuint fluidSizeLoc = glGetUniformLocation(shaderProgram, "fluidSize");
-    GLuint gridSizeLoc = glGetUniformLocation(shaderProgram, "gridSize");
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-    glUniform1i(inputTextureLoc, 0);
-    glUniform1f(fluidSizeLoc, cubeSize);
-    glUniform1i(gridSizeLoc, GRID_SIZE);
+    glActiveTexture(GL_TEXTURE1);
+    glGenTextures(1, &velocityTexture);
+    glBindTexture(GL_TEXTURE_3D, velocityTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 
 
@@ -251,9 +400,34 @@ int main() {
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        float angle = static_cast<float>(glfwGetTime()); // Use time for rotation
-        model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+            applyForce(window);
+        }
+
+//        float angle = static_cast<float>(glfwGetTime()); // Use time for rotation
+//        model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
+//        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+
+// Use the shader program
+        glUseProgram(shaderProgram);
+
+        // Uniform variables
+        GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
+        GLuint viewLoc = glGetUniformLocation(shaderProgram, "view");
+        GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
+        GLuint inputTextureLoc = glGetUniformLocation(shaderProgram, "inputTexture");
+        GLuint fluidSizeLoc = glGetUniformLocation(shaderProgram, "fluidSize");
+        GLuint gridSizeLoc = glGetUniformLocation(shaderProgram, "gridSize");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform1i(inputTextureLoc, 1);
+        glUniform1f(fluidSizeLoc, cubeSize);
+        glUniform1i(gridSizeLoc, GRID_SIZE);
+
+//        glBindVertexArray(quadVAO);
+//        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+//        glBindVertexArray(0);
 
         // Bind the VAO
         glBindVertexArray(VAO);
@@ -268,6 +442,7 @@ int main() {
 
     // Cleanup
     glDeleteTextures(1, &dyeTexture);
+    glDeleteTextures(1, &velocityTexture);
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
