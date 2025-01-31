@@ -3,27 +3,31 @@
 in vec3 texCoords;  // 3D texture coordinates
 out vec4 fragColor;  // Output color
 
+
 uniform sampler3D velocityTexture;
 uniform vec3 forceApplyPos; // Normalized
 uniform vec3 forceDir;      // Direction of the force
 uniform float forceRadius;  // Radius of the force application
 uniform float forceStrength;
+uniform float slice; //normalized
 
 void main() {
-    // Calculate distance from position where force is applied
+//    vec3 texCoord_3d = vec3(texCoords, slice);
+
+//     Calculate distance from position where force is applied
     float distance = length(texCoords - forceApplyPos);
 
-    // Apply force within the radius
+//     Apply force within the radius
     if (distance < forceRadius) {
         float influence = exp(-distance * distance / (2.0 * forceRadius * forceRadius));
         vec3 currentVelocity = texture(velocityTexture, texCoords).xyz;
         vec3 newVelocity = currentVelocity + influence * forceDir * forceStrength;
 
-        fragColor = vec4(0.0, 1.0, 0.0, 1.0);
-//        fragColor = vec4(newVelocity, 1.0);
+//        fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+        fragColor = vec4(newVelocity, 1.0);
     } else {
         fragColor = texture(velocityTexture, texCoords);
     }
 
-//    fragColor = vec4(0.0, 1.0, 0.0, 1.0);
+
 }

@@ -21,9 +21,12 @@ GLuint applyForceShaderProgram;
 
 float cubeSize = 1.0f;
 
-glm::mat4 model = glm::mat4(1.0f); // Identity matrix
-glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.0f, -3.0f)); // Camera back by 3 units
-glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 800.0f, 0.1f, 100.0f); // Perspective
+float viewportWidth;
+float viewportHeight;
+
+glm::mat4 model;
+glm::mat4 view;
+glm::mat4 projection;
 
 // Fullscreen Quad Vertices
 float quadVertices[] = {
@@ -138,6 +141,7 @@ void generateCubeVertices(std::vector<float>& vertices) {
 }
 
 void getMouseNDC(GLFWwindow* window, glm::vec2& mouseNDC) {
+    // Window coordinates
     double mouseX, mouseY;
     glfwGetCursorPos(window, &mouseX, &mouseY);
 
@@ -206,8 +210,13 @@ void applyForce(GLFWwindow* window) {
 
 
     glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 1.2f; // Normalized
+    float forceRadius = 0.5f; // Normalized
     float forceStrength = 5.0f; // Example strength
+
+    std::cout << "Force Position: "
+                  << forcePos.x << ", "
+                  << forcePos.y << ", "
+                  << forcePos.z << std::endl;
 
     // Use the applyForceShaderProgram
     glUseProgram(applyForceShaderProgram);
@@ -218,6 +227,7 @@ void applyForce(GLFWwindow* window) {
     GLuint forceRadiusLoc = glGetUniformLocation(applyForceShaderProgram, "forceRadius");
     GLuint forceStrengthLoc = glGetUniformLocation(applyForceShaderProgram, "forceStrength");
     GLuint velocityTextureLoc = glGetUniformLocation(applyForceShaderProgram, "velocityTexture");
+    GLuint sliceLoc = glGetUniformLocation(applyForceShaderProgram, "slice");
 
     glUniform3fv(forceApplyPosLoc, 1, glm::value_ptr(forcePos));
     glUniform3fv(forceDirLoc, 1, glm::value_ptr(forceDir));
@@ -229,16 +239,24 @@ void applyForce(GLFWwindow* window) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
 
-    for (int slice = 0; slice < GRID_SIZE; slice++) {
+    for (int slice = 0; slice < GRID_SIZE; ++slice) {
+        float sliceDepth = (float) slice / GRID_SIZE;
+        glUniform1f(sliceLoc, static_cast<float>(slice) / GRID_SIZE);
+//        std::cout << "Slice Depth: " << sliceDepth << std::endl;
+
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
-        // Bind each slice (slice) of the 3D texture
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, velocityTexture, 0, slice);
+
+        // Bind each slice of the 3D texture
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
         // Check framebuffer status
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
         }
+
+        glViewport(0, 0, GRID_SIZE, GRID_SIZE);
 
         // Render a full-screen quad to update the texture slice
         glBindVertexArray(quadVAO);
@@ -255,12 +273,12 @@ void applyForce(GLFWwindow* window) {
 //                  << (int)pixels[2] << std::endl;
 //
 //        delete[] pixels;
-
-        std::cout << "Apply slice " << std::endl;
+//
+//        std::cout << "Apply slice " << std::endl;
     }
 
 
-
+    glViewport(0, 0, viewportWidth, viewportHeight);
     // Unbind the framebuffer and texture
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -347,13 +365,10 @@ int main() {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-//    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
 
     glGenFramebuffers(1, &framebuffer);
 
-//    GLint maxTextureSize;
-//    glGetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &maxTextureSize);
-//    std::cout << "Max 3D Texture Size: " << maxTextureSize << std::endl;
 
     // Create textures
     GLfloat zeroData[GRID_SIZE * GRID_SIZE * GRID_SIZE * 4] = {0.0f};
@@ -411,6 +426,28 @@ int main() {
 // Use the shader program
         glUseProgram(shaderProgram);
 
+        GLint viewport[4];
+        glGetIntegerv(GL_VIEWPORT, viewport);
+
+        int x = viewport[1];
+        int y = viewport[1];
+        viewportWidth = viewport[2];
+        viewportHeight = viewport[3];
+
+
+        model = glm::mat4(1.0f); // Identity matrix
+
+        // Camera position (slightly above and behind the cube)
+        glm::vec3 cameraPosition = glm::vec3(0.0f, 1.0f, 3.0f);
+        glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
+        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+
+        // Create the view matrix using glm::lookAt
+        view = glm::lookAt(cameraPosition, cameraTarget, up);
+        projection = projection = glm::perspective(glm::radians(45.0f), (float)viewportWidth / (float)viewportHeight, 0.1f, 100.0f);
+        glViewport(0, 0, viewportWidth, viewportHeight);
+//        glViewport(-800, 800, 1600, 1600);
+
         // Uniform variables
         GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
         GLuint viewLoc = glGetUniformLocation(shaderProgram, "view");
@@ -425,15 +462,13 @@ int main() {
         glUniform1f(fluidSizeLoc, cubeSize);
         glUniform1i(gridSizeLoc, GRID_SIZE);
 
-//        glBindVertexArray(quadVAO);
-//        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-//        glBindVertexArray(0);
 
         // Bind the VAO
         glBindVertexArray(VAO);
 
         // Draw the cube
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(cubeIndices.size()), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
