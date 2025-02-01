@@ -13,10 +13,12 @@ const int GRID_SIZE = 64;
 
 GLuint dyeTexture;
 GLuint velocityTexture;
+GLuint outputTexture;
 GLuint VAO, VBO, EBO;
 GLuint quadVAO, quadVBO, quadEBO;
 GLuint framebuffer;
 GLuint shaderProgram;
+GLuint addDyeShaderProgram;
 GLuint applyForceShaderProgram;
 
 float cubeSize = 1.0f;
@@ -192,6 +194,10 @@ glm::vec3 computeForcePosition(const glm::vec2& mouseNDC) {
     // If intersect: intersection point -halfSize <= x,z <= halfSize, y = halfSize
     // Map intersection point to normalized grid space (0 to 1 range)
     glm::vec3 normalizedPoint = (intersection + glm::vec3(halfSize)) / (2.0f * halfSize);
+    std::cout <<  "Intersection : "
+              << intersection.x << ", "
+              << intersection.y << ", "
+              << intersection.z << std::endl;
     return normalizedPoint;
 }
 
@@ -208,9 +214,9 @@ void applyForce(GLFWwindow* window) {
         return;
     }
 
-
-    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 0.5f; // Normalized
+    glm::vec3 forceDir = glm::vec3(0.0, 1.0, 0.0);
+//    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
+    float forceRadius = 0.1f; // Normalized
     float forceStrength = 5.0f; // Example strength
 
     std::cout << "Force Position: "
@@ -241,15 +247,14 @@ void applyForce(GLFWwindow* window) {
 
     for (int slice = 0; slice < GRID_SIZE; ++slice) {
         float sliceDepth = (float) slice / GRID_SIZE;
-        glUniform1f(sliceLoc, static_cast<float>(slice) / GRID_SIZE);
-//        std::cout << "Slice Depth: " << sliceDepth << std::endl;
+        glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
-        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, velocityTexture, 0, slice);
+//        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, velocityTexture, 0, slice);
 
         // Bind each slice of the 3D texture
-//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
         // Check framebuffer status
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
@@ -285,6 +290,85 @@ void applyForce(GLFWwindow* window) {
 }
 
 
+void addDye(GLFWwindow *window, bool click) {
+    if (!click) {
+        return;
+    }
+
+    glm::vec2 mouseNDC;
+    getMouseNDC(window, mouseNDC);
+
+    // World space
+    glm::vec3 applyDyePos = computeForcePosition(mouseNDC);
+
+    // No intersection with top face
+    if (applyDyePos == glm::vec3(-1, -1, -1)) {
+        std::cout << "No intersection " << std::endl;
+        return;
+    }
+
+    std::cout << "Intersection " << std::endl;
+    std::cout << "Force Position: "
+              << applyDyePos.x << ", "
+              << applyDyePos.y << ", "
+              << applyDyePos.z << std::endl;
+
+
+
+    glUseProgram(addDyeShaderProgram);
+
+    GLuint dyeTextureLoc = glGetUniformLocation(addDyeShaderProgram, "dyeTexture");
+    GLuint addDyePosLoc = glGetUniformLocation(addDyeShaderProgram, "addDyePos");
+    GLuint dyeRadiusLoc = glGetUniformLocation(addDyeShaderProgram, "dyeRadius");
+    GLuint dyeColorLoc = glGetUniformLocation(addDyeShaderProgram, "dyeColor");
+    GLuint addDyeLoc = glGetUniformLocation(addDyeShaderProgram, "addDye");
+    GLuint sliceLoc = glGetUniformLocation(addDyeShaderProgram, "slice");
+
+    glUniform1i(dyeTextureLoc, 0);
+    glUniform3fv(addDyePosLoc, 1, glm::value_ptr(applyDyePos));
+    glUniform1f(dyeRadiusLoc, 0.1);
+    GLfloat dyeColor[3] = { 0.0f, 0.1f, 0.0f };
+    glUniform3fv(dyeColorLoc, 1, dyeColor);
+    glUniform1i(addDyeLoc, click);
+
+
+    // Bind the 3D texture as the framebuffer target
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_3D, dyeTexture);
+//    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) slice / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
+
+        // Check framebuffer status
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+            break;
+        }
+
+        glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+
+    }
+
+
+    std::swap(dyeTexture, outputTexture);
+
+    glViewport(0, 0, viewportWidth, viewportHeight);
+    // Unbind the framebuffer and texture
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 int main() {
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
@@ -308,6 +392,7 @@ int main() {
 
     shaderProgram = createShaderProgram("../shader.vert", "../shader.frag");
     applyForceShaderProgram = createShaderProgram("../quadShader.vert", "../applyForce.frag");
+    addDyeShaderProgram = createShaderProgram("../quadShader.vert", "../addDye.frag");
 
 
     std::vector<float> cubeVertices;
@@ -379,9 +464,9 @@ int main() {
             for (int i = 0; i < GRID_SIZE; ++i) {
                 int index = k * GRID_SIZE * GRID_SIZE + j * GRID_SIZE + i;
                 // You can modify the values here if needed
-                zeroData[index * 4 + 0] = 1.0f; // Set R to 1.0f, for example
-                zeroData[index * 4 + 1] = 0.0f; // G component
-                zeroData[index * 4 + 2] = 0.0f; // B component
+                zeroData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
+                zeroData[index * 4 + 1] = 0.5f; // G component
+                zeroData[index * 4 + 2] = 0.5f; // B component
                 zeroData[index * 4 + 3] = 1.0f; // A component
             }
         }
@@ -408,12 +493,37 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
+    // Output texture
 
+    glActiveTexture(GL_TEXTURE2);
+    glGenTextures(1, &outputTexture);
+    glBindTexture(GL_TEXTURE_3D, outputTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+
+
+
+    GLint viewport[4];
+    glGetIntegerv(GL_VIEWPORT, viewport);
+
+    viewportWidth = viewport[2];
+    viewportHeight = viewport[3];
 
     // Render loop
     while (!glfwWindowShouldClose(window)) {
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+            addDye(window, true);
+        } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
+            addDye(window, false);
+        }
 
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             applyForce(window);
@@ -426,19 +536,10 @@ int main() {
 // Use the shader program
         glUseProgram(shaderProgram);
 
-        GLint viewport[4];
-        glGetIntegerv(GL_VIEWPORT, viewport);
-
-        int x = viewport[1];
-        int y = viewport[1];
-        viewportWidth = viewport[2];
-        viewportHeight = viewport[3];
-
-
         model = glm::mat4(1.0f); // Identity matrix
 
         // Camera position (slightly above and behind the cube)
-        glm::vec3 cameraPosition = glm::vec3(0.0f, 1.0f, 3.0f);
+        glm::vec3 cameraPosition = glm::vec3(0.0f, 1.0f, -2.0f);
         glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -446,7 +547,6 @@ int main() {
         view = glm::lookAt(cameraPosition, cameraTarget, up);
         projection = projection = glm::perspective(glm::radians(45.0f), (float)viewportWidth / (float)viewportHeight, 0.1f, 100.0f);
         glViewport(0, 0, viewportWidth, viewportHeight);
-//        glViewport(-800, 800, 1600, 1600);
 
         // Uniform variables
         GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
@@ -458,7 +558,7 @@ int main() {
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-        glUniform1i(inputTextureLoc, 1);
+        glUniform1i(inputTextureLoc, 0);
         glUniform1f(fluidSizeLoc, cubeSize);
         glUniform1i(gridSizeLoc, GRID_SIZE);
 

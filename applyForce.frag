@@ -3,7 +3,6 @@
 in vec3 texCoords;  // 3D texture coordinates
 out vec4 fragColor;  // Output color
 
-
 uniform sampler3D velocityTexture;
 uniform vec3 forceApplyPos; // Normalized
 uniform vec3 forceDir;      // Direction of the force
@@ -23,7 +22,6 @@ void main() {
         vec3 currentVelocity = texture(velocityTexture, texCoords).xyz;
         vec3 newVelocity = currentVelocity + influence * forceDir * forceStrength;
 
-//        fragColor = vec4(0.0, 1.0, 0.0, 1.0);
         fragColor = vec4(newVelocity, 1.0);
     } else {
         fragColor = texture(velocityTexture, texCoords);
