@@ -331,21 +331,19 @@ void addDye(GLFWwindow *window, bool click) {
     glUniform3fv(dyeColorLoc, 1, dyeColor);
     glUniform1i(addDyeLoc, click);
 
-
     // Bind the 3D texture as the framebuffer target
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_3D, dyeTexture);
-//    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_3D, outputTexture);
+
 
     for (int slice = 0; slice < GRID_SIZE; slice++) {
-        float sliceDepth = (float) slice / GRID_SIZE;
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+//        float sliceDepth = (float) slice / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
-        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
-
-        // Check framebuffer status
+//        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
@@ -358,11 +356,11 @@ void addDye(GLFWwindow *window, bool click) {
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
 
-
     }
 
 
     std::swap(dyeTexture, outputTexture);
+
 
     glViewport(0, 0, viewportWidth, viewportHeight);
     // Unbind the framebuffer and texture
@@ -493,7 +491,6 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-    // Output texture
 
     glActiveTexture(GL_TEXTURE2);
     glGenTextures(1, &outputTexture);
@@ -504,8 +501,6 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-
 
 
     GLint viewport[4];

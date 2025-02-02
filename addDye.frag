@@ -13,7 +13,7 @@ out vec4 fragColor;
 
 void main() {
     // Current color of fragment
-    vec4 currentColor = texture(dyeTexture, vec3(texCoords.xy, slice));
+    vec4 currentColor = texture(dyeTexture, texCoords);
 
     // Distance of fragment from position where dye is dropped
     float dist = distance(texCoords, addDyePos);
@@ -23,6 +23,7 @@ void main() {
         float colorIntensity = 1.0 - dist / dyeRadius;
         vec3 addedDye = dyeColor * colorIntensity;
         currentColor.rgb += addedDye;
+
     }
 
     fragColor = currentColor;
