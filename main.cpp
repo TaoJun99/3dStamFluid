@@ -13,7 +13,6 @@ const int GRID_SIZE = 64;
 
 GLuint dyeTexture;
 GLuint velocityTexture;
-GLuint outputTexture;
 GLuint VAO, VBO, EBO;
 GLuint quadVAO, quadVBO, quadEBO;
 GLuint framebuffer;
@@ -246,12 +245,11 @@ void applyForce(GLFWwindow* window) {
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
 
     for (int slice = 0; slice < GRID_SIZE; ++slice) {
-        float sliceDepth = (float) slice / GRID_SIZE;
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
-//        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, velocityTexture, 0, slice);
 
         // Bind each slice of the 3D texture
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
@@ -333,17 +331,15 @@ void addDye(GLFWwindow *window, bool click) {
 
     // Bind the 3D texture as the framebuffer target
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_3D, outputTexture);
+    glBindTexture(GL_TEXTURE_3D, dyeTexture);
 
 
     for (int slice = 0; slice < GRID_SIZE; slice++) {
         float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
-//        float sliceDepth = (float) slice / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-//        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, dyeTexture, 0, slice);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
@@ -358,8 +354,6 @@ void addDye(GLFWwindow *window, bool click) {
 
     }
 
-
-    std::swap(dyeTexture, outputTexture);
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
@@ -485,17 +479,6 @@ int main() {
     glGenTextures(1, &velocityTexture);
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-
-    glActiveTexture(GL_TEXTURE2);
-    glGenTextures(1, &outputTexture);
-    glBindTexture(GL_TEXTURE_3D, outputTexture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
