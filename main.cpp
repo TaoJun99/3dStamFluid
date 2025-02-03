@@ -19,6 +19,7 @@ GLuint framebuffer;
 GLuint shaderProgram;
 GLuint addDyeShaderProgram;
 GLuint applyForceShaderProgram;
+GLuint advectShaderProgram;
 
 float cubeSize = 1.0f;
 
@@ -28,6 +29,8 @@ float viewportHeight;
 glm::mat4 model;
 glm::mat4 view;
 glm::mat4 projection;
+
+float timeStep = 0.01;
 
 // Fullscreen Quad Vertices
 float quadVertices[] = {
@@ -213,10 +216,10 @@ void applyForce(GLFWwindow* window) {
         return;
     }
 
-    glm::vec3 forceDir = glm::vec3(0.0, 1.0, 0.0);
+    glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
     float forceRadius = 0.1f; // Normalized
-    float forceStrength = 5.0f; // Example strength
+    float forceStrength = 1.0f; // Example strength
 
     std::cout << "Force Position: "
                   << forcePos.x << ", "
@@ -311,6 +314,16 @@ void addDye(GLFWwindow *window, bool click) {
               << applyDyePos.y << ", "
               << applyDyePos.z << std::endl;
 
+    GLuint outputTexture;
+    glActiveTexture(GL_TEXTURE5);
+    glGenTextures(1, &outputTexture);
+    glBindTexture(GL_TEXTURE_3D, outputTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 
     glUseProgram(addDyeShaderProgram);
@@ -330,8 +343,8 @@ void addDye(GLFWwindow *window, bool click) {
     glUniform1i(addDyeLoc, click);
 
     // Bind the 3D texture as the framebuffer target
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_3D, dyeTexture);
+    glActiveTexture(GL_TEXTURE5);
+    glBindTexture(GL_TEXTURE_3D, outputTexture);
 
 
     for (int slice = 0; slice < GRID_SIZE; slice++) {
@@ -339,7 +352,7 @@ void addDye(GLFWwindow *window, bool click) {
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, dyeTexture, 0, slice);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
@@ -354,11 +367,91 @@ void addDye(GLFWwindow *window, bool click) {
 
     }
 
+    std::swap(outputTexture, dyeTexture);
+
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
     // Unbind the framebuffer and texture
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteTextures(1, &outputTexture);
+}
+
+void advect(GLuint texture) {
+    glUseProgram(advectShaderProgram);
+
+    // Bind the velocity and dye textures
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_3D, dyeTexture);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_3D, velocityTexture);
+
+    GLuint outputTexture;
+    glActiveTexture(GL_TEXTURE5);
+    glGenTextures(1, &outputTexture);
+    glBindTexture(GL_TEXTURE_3D, outputTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+
+    // Set the uniform variables
+    GLuint timestepLoc = glGetUniformLocation(advectShaderProgram, "timestep");
+    GLuint rdxLoc = glGetUniformLocation(advectShaderProgram, "rdx");
+    GLuint velocityTextureLoc = glGetUniformLocation(advectShaderProgram, "velocityTexture");
+    GLuint advectedTextureLoc = glGetUniformLocation(advectShaderProgram, "advectedTexture");
+    GLuint sliceLoc = glGetUniformLocation(advectShaderProgram, "slice");
+
+    glUniform1f(timestepLoc, timeStep);
+    glUniform1f(rdxLoc, 1.0 / GRID_SIZE);
+    glUniform1i(velocityTextureLoc, 1);
+
+
+    if (texture == dyeTexture) {
+        glUniform1i(advectedTextureLoc, 0);
+    } else if (texture == velocityTexture) {
+        glUniform1i(advectedTextureLoc, 1);
+    }
+
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, texture, 0, slice);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+            break;
+        }
+
+        glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+    }
+
+//    if (texture == velocityTexture) {
+//        std::swap(outputTexture, velocityTexture);
+//    } else {
+//        std::swap(outputTexture, dyeTexture);
+//    }
+
+
+//    applyBoundaryConditions(texture, false);
+
+    glViewport(0, 0, viewportWidth, viewportHeight);
+
+    // Unbind the framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteTextures(1, &outputTexture);
 }
 
 int main() {
@@ -385,6 +478,7 @@ int main() {
     shaderProgram = createShaderProgram("../shader.vert", "../shader.frag");
     applyForceShaderProgram = createShaderProgram("../quadShader.vert", "../applyForce.frag");
     addDyeShaderProgram = createShaderProgram("../quadShader.vert", "../addDye.frag");
+    advectShaderProgram = createShaderProgram("../quadShader.vert", "../advect.frag");
 
 
     std::vector<float> cubeVertices;
@@ -448,7 +542,9 @@ int main() {
 
 
     // Create textures
-    GLfloat zeroData[GRID_SIZE * GRID_SIZE * GRID_SIZE * 4] = {0.0f};
+    std::vector<GLfloat> zeroData(GRID_SIZE * GRID_SIZE * GRID_SIZE * 4, 0.0f);
+
+    std::vector<GLfloat> colorData(GRID_SIZE * GRID_SIZE * GRID_SIZE * 4, 0.0f);
 
     // Modify specific elements (optional)
     for (int k = 0; k < GRID_SIZE; ++k) {
@@ -456,10 +552,10 @@ int main() {
             for (int i = 0; i < GRID_SIZE; ++i) {
                 int index = k * GRID_SIZE * GRID_SIZE + j * GRID_SIZE + i;
                 // You can modify the values here if needed
-                zeroData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
-                zeroData[index * 4 + 1] = 0.5f; // G component
-                zeroData[index * 4 + 2] = 0.5f; // B component
-                zeroData[index * 4 + 3] = 1.0f; // A component
+                colorData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
+                colorData[index * 4 + 1] = 0.5f; // G component
+                colorData[index * 4 + 2] = 0.5f; // B component
+                colorData[index * 4 + 3] = 1.0f; // A component
             }
         }
     }
@@ -468,7 +564,7 @@ int main() {
     glActiveTexture(GL_TEXTURE0);
     glGenTextures(1, &dyeTexture);
     glBindTexture(GL_TEXTURE_3D, dyeTexture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, colorData.data());
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -478,12 +574,14 @@ int main() {
     glActiveTexture(GL_TEXTURE1);
     glGenTextures(1, &velocityTexture);
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData.data());
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+
 
 
     GLint viewport[4];
@@ -506,6 +604,10 @@ int main() {
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             applyForce(window);
         }
+
+        advect(velocityTexture);
+        advect(dyeTexture);
+
 
 //        float angle = static_cast<float>(glfwGetTime()); // Use time for rotation
 //        model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
