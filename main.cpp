@@ -13,6 +13,9 @@ const int GRID_SIZE = 64;
 
 GLuint dyeTexture;
 GLuint velocityTexture;
+GLuint pressureTexture;
+GLuint jacobiTexture1;
+GLuint jacobiTexture2;
 GLuint outputTexture;
 GLuint VAO, VBO, EBO;
 GLuint quadVAO, quadVBO, quadEBO;
@@ -21,6 +24,7 @@ GLuint shaderProgram;
 GLuint addDyeShaderProgram;
 GLuint applyForceShaderProgram;
 GLuint advectShaderProgram;
+GLuint jacobiShaderProgram;
 
 float cubeSize = 1.0f;
 
@@ -219,8 +223,8 @@ void applyForce(GLFWwindow* window) {
 
     glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 0.1f; // Normalized
-    float forceStrength = 1.0f; // Example strength
+    float forceRadius = 0.3f; // Normalized
+    float forceStrength = 10.0f; // Example strength
 
     std::cout << "Force Position: "
                   << forcePos.x << ", "
@@ -248,22 +252,21 @@ void applyForce(GLFWwindow* window) {
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
 
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
     for (int slice = 0; slice < GRID_SIZE; ++slice) {
         float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
-
         // Bind each slice of the 3D texture
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
         // Check framebuffer status
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
-            break;
-        }
-
-        glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
 
         // Render a full-screen quad to update the texture slice
         glBindVertexArray(quadVAO);
@@ -313,7 +316,7 @@ void copyTexture(GLuint srcTexture, GLuint dstTexture) {
         );
     }
 
-// Cleanup
+    // Cleanup
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glDeleteFramebuffers(1, &srcFBO);
     glDeleteFramebuffers(1, &dstFBO);
@@ -355,14 +358,16 @@ void addDye(GLFWwindow *window, bool click) {
 
     glUniform1i(dyeTextureLoc, 0);
     glUniform3fv(addDyePosLoc, 1, glm::value_ptr(applyDyePos));
-    glUniform1f(dyeRadiusLoc, 0.1);
-    GLfloat dyeColor[3] = { 0.0f, 0.1f, 0.0f };
+    glUniform1f(dyeRadiusLoc, 0.3);
+    GLfloat dyeColor[3] = { 0.0f, 0.5f, 0.0f };
     glUniform3fv(dyeColorLoc, 1, dyeColor);
     glUniform1i(addDyeLoc, click);
 
     // Bind the 3D texture as the framebuffer target
     glActiveTexture(GL_TEXTURE5);
     glBindTexture(GL_TEXTURE_3D, outputTexture);
+
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
 
 
     for (int slice = 0; slice < GRID_SIZE; slice++) {
@@ -371,12 +376,10 @@ void addDye(GLFWwindow *window, bool click) {
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
-            break;
-        }
-
-        glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
 
         // Render a full-screen quad to update the texture slice
         glBindVertexArray(quadVAO);
@@ -421,6 +424,7 @@ void advect(GLuint texture) {
         glUniform1i(advectedTextureLoc, 1);
     }
 
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
 
     for (int slice = 0; slice < GRID_SIZE; slice++) {
         float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
@@ -428,12 +432,12 @@ void advect(GLuint texture) {
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
-            break;
-        }
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
 
-        glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
 
         // Render a full-screen quad to update the texture slice
         glBindVertexArray(quadVAO);
@@ -450,6 +454,124 @@ void advect(GLuint texture) {
 
     // Unbind the framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
+
+    if (texture == velocityTexture) {
+        glUniform1i(xLoc, 1);
+    } else if (texture == pressureTexture) {
+        glUniform1i(xLoc, 2);
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+    // 1st iteration: write to jacobiTexture1
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, jacobiTexture1, 0, slice);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+            break;
+        }
+
+
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+    }
+
+//    if (outputTexture == velocityTexture) {
+//        applyBoundaryConditions(jacobiTexture1, false);
+//    } else if (outputTexture == pressureTexture) {
+//        applyBoundaryConditions(jacobiTexture1, true);
+//    }
+
+    int NO_OF_ITERATIONS = 20;
+    GLuint currTexture; //texture to write to
+    for (int i = 0; i < NO_OF_ITERATIONS; i++) {
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        for (int slice = 0; slice < GRID_SIZE; slice++) {
+            float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+            glUniform1f(sliceLoc, sliceDepth);
+
+            // Alternate between two textures to read & write
+            if (i % 2 == 0) { // Multiple of 2 - input: jacobiTexture1, output: jacobiTexture2
+                currTexture = jacobiTexture2;
+                // Bind output texture to framebuffer
+                glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, currTexture, 0, slice);
+                // Input texture
+                glUniform1i(xLoc, 3);
+            } else {// input: jacobiTexture2, output: jacobiTexture1
+                currTexture = jacobiTexture1;
+                // Bind output texture to framebuffer
+                glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, currTexture, 0, slice);
+                // Input texture
+                glUniform1i(xLoc, 4);
+            }
+
+//            if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//                std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//                break;
+//            }
+
+
+            // Render a full-screen quad to update the texture slice
+            glBindVertexArray(quadVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
+
+
+
+//        if (outputTexture == velocityTexture) {
+//            applyBoundaryConditions(currTexture, false);
+//        } else if (outputTexture == pressureTexture) {
+//            applyBoundaryConditions(currTexture, true);
+//        }
+
+    }
+
+
+    // Copy final texture (jacobiTexture1: odd, jacobiTexture2: even) to texture
+    copyTexture(jacobiTexture1, texture);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void diffuse(GLuint texture) {
+    glUseProgram(jacobiShaderProgram);
+
+    // Uniform variables
+    GLuint alphaLoc = glGetUniformLocation(jacobiShaderProgram, "alpha");
+    GLuint rBetaLoc = glGetUniformLocation(jacobiShaderProgram, "rBeta");
+    GLuint xLoc = glGetUniformLocation(jacobiShaderProgram, "x");
+    GLuint bLoc = glGetUniformLocation(jacobiShaderProgram, "b");
+    GLuint gridSizeLoc = glGetUniformLocation(jacobiShaderProgram, "gridSize");
+    GLuint sliceLoc = glGetUniformLocation(jacobiShaderProgram, "slice");
+
+    float dx = 1.0 / GRID_SIZE;
+    float nu = 0.0002;
+    float alpha = (dx * dx) / (nu * timeStep);
+
+    glUniform1f(alphaLoc, alpha);
+    glUniform1f(rBetaLoc, 1.0f / (6.0f + alpha));
+    glUniform1i(gridSizeLoc, GRID_SIZE);
+
+    if (texture == dyeTexture) {
+        glUniform1i(bLoc, 0);
+//        jacobi(dyeTexture, xLoc, sliceLoc);
+    } else if (texture == velocityTexture) {
+        glUniform1i(bLoc, 1);
+        jacobi(velocityTexture, xLoc, sliceLoc);
+    }
+
+
 }
 
 int main() {
@@ -477,6 +599,7 @@ int main() {
     applyForceShaderProgram = createShaderProgram("../quadShader.vert", "../applyForce.frag");
     addDyeShaderProgram = createShaderProgram("../quadShader.vert", "../addDye.frag");
     advectShaderProgram = createShaderProgram("../quadShader.vert", "../advect.frag");
+    jacobiShaderProgram = createShaderProgram("../quadShader.vert", "../jacobi.frag");
 
 
     std::vector<float> cubeVertices;
@@ -579,6 +702,36 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
+    glActiveTexture(GL_TEXTURE2);
+    glGenTextures(1, &pressureTexture);
+    glBindTexture(GL_TEXTURE_3D, pressureTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, zeroData.data());
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    glActiveTexture(GL_TEXTURE3);
+    glGenTextures(1, &jacobiTexture1);
+    glBindTexture(GL_TEXTURE_3D, jacobiTexture1);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    glActiveTexture(GL_TEXTURE4);
+    glGenTextures(1, &jacobiTexture2);
+    glBindTexture(GL_TEXTURE_3D, jacobiTexture2);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
     glActiveTexture(GL_TEXTURE5);
     glGenTextures(1, &outputTexture);
     glBindTexture(GL_TEXTURE_3D, outputTexture);
@@ -588,8 +741,6 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-
 
 
     GLint viewport[4];
@@ -616,6 +767,7 @@ int main() {
         advect(velocityTexture);
         advect(dyeTexture);
 
+        diffuse(velocityTexture);
 
 
 // Use the shader program
