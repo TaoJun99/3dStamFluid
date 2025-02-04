@@ -13,6 +13,7 @@ const int GRID_SIZE = 64;
 
 GLuint dyeTexture;
 GLuint velocityTexture;
+GLuint outputTexture;
 GLuint VAO, VBO, EBO;
 GLuint quadVAO, quadVBO, quadEBO;
 GLuint framebuffer;
@@ -290,6 +291,34 @@ void applyForce(GLFWwindow* window) {
 
 }
 
+void copyTexture(GLuint srcTexture, GLuint dstTexture) {
+    GLuint srcFBO, dstFBO;
+    glGenFramebuffers(1, &srcFBO);
+    glGenFramebuffers(1, &dstFBO);
+
+    for (int z = 0; z < GRID_SIZE; ++z) {
+        // Bind source framebuffer
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, srcFBO);
+        glFramebufferTextureLayer(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, srcTexture, 0, z);
+
+        // Bind destination framebuffer
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstFBO);
+        glFramebufferTextureLayer(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, dstTexture, 0, z);
+
+        // Copy the layer using blit
+        glBlitFramebuffer(
+                0, 0, GRID_SIZE, GRID_SIZE, // Source rectangle
+                0, 0, GRID_SIZE, GRID_SIZE, // Destination rectangle
+                GL_COLOR_BUFFER_BIT, GL_NEAREST
+        );
+    }
+
+// Cleanup
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &srcFBO);
+    glDeleteFramebuffers(1, &dstFBO);
+}
+
 
 void addDye(GLFWwindow *window, bool click) {
     if (!click) {
@@ -313,17 +342,6 @@ void addDye(GLFWwindow *window, bool click) {
               << applyDyePos.x << ", "
               << applyDyePos.y << ", "
               << applyDyePos.z << std::endl;
-
-    GLuint outputTexture;
-    glActiveTexture(GL_TEXTURE5);
-    glGenTextures(1, &outputTexture);
-    glBindTexture(GL_TEXTURE_3D, outputTexture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 
     glUseProgram(addDyeShaderProgram);
@@ -367,14 +385,12 @@ void addDye(GLFWwindow *window, bool click) {
 
     }
 
-    std::swap(outputTexture, dyeTexture);
-
+    copyTexture(outputTexture, dyeTexture);
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
     // Unbind the framebuffer and texture
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDeleteTextures(1, &outputTexture);
 }
 
 void advect(GLuint texture) {
@@ -386,18 +402,6 @@ void advect(GLuint texture) {
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
-
-    GLuint outputTexture;
-    glActiveTexture(GL_TEXTURE5);
-    glGenTextures(1, &outputTexture);
-    glBindTexture(GL_TEXTURE_3D, outputTexture);
-    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
 
     // Set the uniform variables
     GLuint timestepLoc = glGetUniformLocation(advectShaderProgram, "timestep");
@@ -423,7 +427,7 @@ void advect(GLuint texture) {
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, texture, 0, slice);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
@@ -438,12 +442,7 @@ void advect(GLuint texture) {
 
     }
 
-//    if (texture == velocityTexture) {
-//        std::swap(outputTexture, velocityTexture);
-//    } else {
-//        std::swap(outputTexture, dyeTexture);
-//    }
-
+    copyTexture(outputTexture, texture);
 
 //    applyBoundaryConditions(texture, false);
 
@@ -451,7 +450,6 @@ void advect(GLuint texture) {
 
     // Unbind the framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDeleteTextures(1, &outputTexture);
 }
 
 int main() {
@@ -581,6 +579,16 @@ int main() {
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
+    glActiveTexture(GL_TEXTURE5);
+    glGenTextures(1, &outputTexture);
+    glBindTexture(GL_TEXTURE_3D, outputTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
 
 
 
@@ -609,9 +617,6 @@ int main() {
         advect(dyeTexture);
 
 
-//        float angle = static_cast<float>(glfwGetTime()); // Use time for rotation
-//        model = glm::rotate(glm::mat4(1.0f), angle, glm::vec3(0.0f, 1.0f, 0.0f));
-//        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
 // Use the shader program
         glUseProgram(shaderProgram);
