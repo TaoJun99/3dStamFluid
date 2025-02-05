@@ -20,7 +20,7 @@ void main() {
     if (distance < forceRadius) {
         float influence = exp(-distance * distance / (2.0 * forceRadius * forceRadius));
         vec3 currentVelocity = texture(velocityTexture, texCoords).xyz;
-        vec3 newVelocity = currentVelocity + influence * forceDir * forceStrength;
+        vec3 newVelocity = currentVelocity + influence * normalize(texCoords - forceApplyPos) * forceStrength;
 
         fragColor = vec4(newVelocity, 1.0);
     } else {

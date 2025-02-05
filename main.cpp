@@ -25,6 +25,9 @@ GLuint addDyeShaderProgram;
 GLuint applyForceShaderProgram;
 GLuint advectShaderProgram;
 GLuint jacobiShaderProgram;
+GLuint divergenceShaderProgram;
+GLuint gradientSubtractShaderProgram;
+GLuint boundaryShaderProgram;
 
 float cubeSize = 1.0f;
 
@@ -492,7 +495,7 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
 //        applyBoundaryConditions(jacobiTexture1, true);
 //    }
 
-    int NO_OF_ITERATIONS = 20;
+    int NO_OF_ITERATIONS = 10;
     GLuint currTexture; //texture to write to
     for (int i = 0; i < NO_OF_ITERATIONS; i++) {
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -541,6 +544,7 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
     // Copy final texture (jacobiTexture1: odd, jacobiTexture2: even) to texture
     copyTexture(jacobiTexture1, texture);
 
+    glViewport(0, 0, viewportWidth, viewportHeight);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -571,6 +575,131 @@ void diffuse(GLuint texture) {
         jacobi(velocityTexture, xLoc, sliceLoc);
     }
 
+}
+
+void divergence(GLuint divergenceTexture) {
+    glUseProgram(divergenceShaderProgram);
+
+    GLuint wLoc = glGetUniformLocation(divergenceShaderProgram, "w");
+    GLuint halfrdxLoc = glGetUniformLocation(divergenceShaderProgram, "halfrdx");
+    GLuint gridSizeLoc = glGetUniformLocation(divergenceShaderProgram, "gridSize");
+    GLuint sliceLoc = glGetUniformLocation(divergenceShaderProgram, "slice");
+
+    glUniform1i(wLoc, 1);
+    glUniform1f(halfrdxLoc, 1.0 / (2.0  * GRID_SIZE));
+    glUniform1i(gridSizeLoc, GRID_SIZE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+//        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, divergenceTexture, 0, slice);
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+    }
+
+    glViewport(0, 0, viewportWidth, viewportHeight);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void subtractGradient() {
+    glUseProgram(gradientSubtractShaderProgram);
+
+    GLuint pLoc = glGetUniformLocation(gradientSubtractShaderProgram, "p");
+    GLuint wLoc = glGetUniformLocation(gradientSubtractShaderProgram, "w");
+    GLuint halfrdxLoc = glGetUniformLocation(gradientSubtractShaderProgram, "halfrdx");
+    GLuint gridSizeLoc = glGetUniformLocation(gradientSubtractShaderProgram, "gridSize");
+    GLuint sliceLoc = glGetUniformLocation(gradientSubtractShaderProgram, "slice");
+
+    glUniform1i(pLoc, 2);
+    glUniform1i(wLoc, 1);
+    glUniform1f(halfrdxLoc, 1.0 / (2.0  * GRID_SIZE));
+    glUniform1i(gridSizeLoc, GRID_SIZE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+    }
+
+    copyTexture(outputTexture, velocityTexture);
+
+//    applyBoundaryConditions(velocityTexture, false);
+
+    glViewport(0, 0, viewportWidth, viewportHeight);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void project() {
+    // Divergence of intermediate velocity field w
+    GLuint divergenceTexture;
+    glActiveTexture(GL_TEXTURE6);
+    glGenTextures(1, &divergenceTexture);
+    glBindTexture(GL_TEXTURE_3D, divergenceTexture);
+    glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    divergence(divergenceTexture);
+
+    glUseProgram(jacobiShaderProgram);
+
+    GLuint alphaLoc = glGetUniformLocation(jacobiShaderProgram, "alpha");
+    GLuint rBetaLoc = glGetUniformLocation(jacobiShaderProgram, "rBeta");
+    GLuint xLoc = glGetUniformLocation(jacobiShaderProgram, "x");
+    GLuint bLoc = glGetUniformLocation(jacobiShaderProgram, "b");
+    GLuint gridSizeLoc = glGetUniformLocation(jacobiShaderProgram, "gridSize");
+    GLuint sliceLoc = glGetUniformLocation(jacobiShaderProgram, "slice");
+
+    float dx = GRID_SIZE;
+    float alpha = -(dx * dx);
+    float rBeta = 1.0 / 6.0;
+
+    glUniform1f(alphaLoc, alpha);
+    glUniform1f(rBetaLoc, rBeta);
+    glUniform1i(bLoc, 6); // divergence of w
+    glUniform1i(gridSizeLoc, GRID_SIZE);
+
+    // Solve for pressure field
+    jacobi(pressureTexture, xLoc, sliceLoc);
+
+    subtractGradient();
+
+    glDeleteTextures(1, &divergenceTexture);
 
 }
 
@@ -600,6 +729,8 @@ int main() {
     addDyeShaderProgram = createShaderProgram("../quadShader.vert", "../addDye.frag");
     advectShaderProgram = createShaderProgram("../quadShader.vert", "../advect.frag");
     jacobiShaderProgram = createShaderProgram("../quadShader.vert", "../jacobi.frag");
+    divergenceShaderProgram = createShaderProgram("../quadShader.vert", "../divergence.frag");
+    gradientSubtractShaderProgram = createShaderProgram("../quadShader.vert", "../subtractGradient.frag");
 
 
     std::vector<float> cubeVertices;
@@ -768,6 +899,9 @@ int main() {
         advect(dyeTexture);
 
         diffuse(velocityTexture);
+        // diffuse(dyeTexture);
+
+         project();
 
 
 // Use the shader program
