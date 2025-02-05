@@ -371,13 +371,13 @@ void addDye(GLFWwindow *window, bool click) {
     glBindTexture(GL_TEXTURE_3D, outputTexture);
 
     glViewport(0, 0, GRID_SIZE, GRID_SIZE);
-
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
     for (int slice = 0; slice < GRID_SIZE; slice++) {
         float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
         glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
 //        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 //            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
@@ -398,6 +398,59 @@ void addDye(GLFWwindow *window, bool click) {
     // Unbind the framebuffer and texture
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
+
+void applyBoundaryConditions(GLuint texture, bool isPressure) {
+    glUseProgram(boundaryShaderProgram);
+
+    GLuint scaleLoc = glGetUniformLocation(boundaryShaderProgram, "scale");
+    GLuint textureLoc = glGetUniformLocation(boundaryShaderProgram, "texture");
+    GLuint gridSizeLoc = glGetUniformLocation(boundaryShaderProgram, "gridSize");
+    GLuint sliceLoc = glGetUniformLocation(boundaryShaderProgram, "slice");
+
+    if (isPressure) {
+        glUniform1f(scaleLoc, 1.0);
+    } else {
+        glUniform1f(scaleLoc, -1.0);
+    }
+
+    if (texture == dyeTexture) {
+        glUniform1i(textureLoc, 0);
+    } else if (texture == velocityTexture) {
+        glUniform1i(textureLoc, 1);
+    } else if (texture == pressureTexture) {
+        glUniform1i(textureLoc, 2);
+    }
+//    glUniform1i(textureLoc, texture);
+    glUniform1i(gridSizeLoc, GRID_SIZE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, texture, 0, slice);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+            break;
+        }
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+    }
+
+
+
+//    glViewport(0, 0, viewportWidth, viewportHeight);
+//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+}
+
 
 void advect(GLuint texture) {
     glUseProgram(advectShaderProgram);
@@ -451,7 +504,10 @@ void advect(GLuint texture) {
 
     copyTexture(outputTexture, texture);
 
-//    applyBoundaryConditions(texture, false);
+
+    applyBoundaryConditions(texture, false);
+
+
 
     glViewport(0, 0, viewportWidth, viewportHeight);
 
@@ -731,6 +787,7 @@ int main() {
     jacobiShaderProgram = createShaderProgram("../quadShader.vert", "../jacobi.frag");
     divergenceShaderProgram = createShaderProgram("../quadShader.vert", "../divergence.frag");
     gradientSubtractShaderProgram = createShaderProgram("../quadShader.vert", "../subtractGradient.frag");
+    boundaryShaderProgram = createShaderProgram("../quadShader.vert", "../boundary.frag");
 
 
     std::vector<float> cubeVertices;
@@ -807,7 +864,7 @@ int main() {
                 colorData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
                 colorData[index * 4 + 1] = 0.5f; // G component
                 colorData[index * 4 + 2] = 0.5f; // B component
-                colorData[index * 4 + 3] = 1.0f; // A component
+                colorData[index * 4 + 3] = 0.5f; // A component
             }
         }
     }
