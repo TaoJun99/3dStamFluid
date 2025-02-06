@@ -23,7 +23,6 @@ void main() {
         float colorIntensity = 1.0 - dist / dyeRadius;
         vec3 addedDye = dyeColor * colorIntensity;
         currentColor.rgb += addedDye;
-
     }
 
     fragColor = currentColor;

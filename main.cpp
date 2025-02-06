@@ -110,8 +110,8 @@ GLuint createShaderProgram(const std::string& vertexPath, const std::string& fra
 }
 
 // Function to generate cube vertices based on a size variable
-void generateCubeVertices(std::vector<float>& vertices) {
-    float halfSize = cubeSize / 2.0f;
+void generateCubeVertices(std::vector<float>& vertices, float size) {
+    float halfSize = size / 2.0f;
 
     vertices = {
             // Front face
@@ -227,7 +227,7 @@ void applyForce(GLFWwindow* window) {
     glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
     float forceRadius = 0.3f; // Normalized
-    float forceStrength = 10.0f; // Example strength
+    float forceStrength = 50.0f; // Example strength
 
     std::cout << "Force Position: "
                   << forcePos.x << ", "
@@ -362,7 +362,7 @@ void addDye(GLFWwindow *window, bool click) {
     glUniform1i(dyeTextureLoc, 0);
     glUniform3fv(addDyePosLoc, 1, glm::value_ptr(applyDyePos));
     glUniform1f(dyeRadiusLoc, 0.3);
-    GLfloat dyeColor[3] = { 0.0f, 0.5f, 0.0f };
+    GLfloat dyeColor[3] = { 1.0f, 0.0f, 0.0f };
     glUniform3fv(dyeColorLoc, 1, dyeColor);
     glUniform1i(addDyeLoc, click);
 
@@ -400,6 +400,7 @@ void addDye(GLFWwindow *window, bool click) {
 }
 
 void applyBoundaryConditions(GLuint texture, bool isPressure) {
+
     glUseProgram(boundaryShaderProgram);
 
     GLuint scaleLoc = glGetUniformLocation(boundaryShaderProgram, "scale");
@@ -504,9 +505,9 @@ void advect(GLuint texture) {
 
     copyTexture(outputTexture, texture);
 
-
-    applyBoundaryConditions(texture, false);
-
+    if (texture == velocityTexture) {
+        applyBoundaryConditions(texture, false);
+    }
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
@@ -545,11 +546,11 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
         glBindVertexArray(0);
     }
 
-//    if (outputTexture == velocityTexture) {
-//        applyBoundaryConditions(jacobiTexture1, false);
-//    } else if (outputTexture == pressureTexture) {
-//        applyBoundaryConditions(jacobiTexture1, true);
-//    }
+    if (outputTexture == velocityTexture) {
+        applyBoundaryConditions(jacobiTexture1, false);
+    } else if (outputTexture == pressureTexture) {
+        applyBoundaryConditions(jacobiTexture1, true);
+    }
 
     int NO_OF_ITERATIONS = 10;
     GLuint currTexture; //texture to write to
@@ -588,11 +589,11 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
 
 
 
-//        if (outputTexture == velocityTexture) {
-//            applyBoundaryConditions(currTexture, false);
-//        } else if (outputTexture == pressureTexture) {
-//            applyBoundaryConditions(currTexture, true);
-//        }
+        if (outputTexture == velocityTexture) {
+            applyBoundaryConditions(currTexture, false);
+        } else if (outputTexture == pressureTexture) {
+            applyBoundaryConditions(currTexture, true);
+        }
 
     }
 
@@ -710,7 +711,7 @@ void subtractGradient() {
 
     copyTexture(outputTexture, velocityTexture);
 
-//    applyBoundaryConditions(velocityTexture, false);
+    applyBoundaryConditions(velocityTexture, false);
 
     glViewport(0, 0, viewportWidth, viewportHeight);
 
@@ -791,10 +792,22 @@ int main() {
 
 
     std::vector<float> cubeVertices;
-    generateCubeVertices(cubeVertices);
+    generateCubeVertices(cubeVertices, 1.0f);
 
     // Indices for drawing the cube with EBO
     std::vector<unsigned int> cubeIndices = {
+            0, 1, 2, 2, 3, 0,       // Front face
+            4, 5, 6, 6, 7, 4,       // Back face
+            8, 9, 10, 10, 11, 8,    // Left face
+            12, 13, 14, 14, 15, 12, // Right face
+            16, 17, 18, 18, 19, 16, // Bottom face
+            20, 21, 22, 22, 23, 20  // Top face
+    };
+
+    std::vector<float> waterVertices;
+    generateCubeVertices(waterVertices, 0.8);
+
+    std::vector<unsigned int> waterIndices = {
             0, 1, 2, 2, 3, 0,       // Front face
             4, 5, 6, 6, 7, 4,       // Back face
             8, 9, 10, 10, 11, 8,    // Left face
@@ -845,7 +858,7 @@ int main() {
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    glEnable(GL_DEPTH_TEST);
+//    glEnable(GL_DEPTH_TEST);
 
     glGenFramebuffers(1, &framebuffer);
 
@@ -864,7 +877,7 @@ int main() {
                 colorData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
                 colorData[index * 4 + 1] = 0.5f; // G component
                 colorData[index * 4 + 2] = 0.5f; // B component
-                colorData[index * 4 + 3] = 0.5f; // A component
+                colorData[index * 4 + 3] = 1.0f; // A component
             }
         }
     }
@@ -967,7 +980,7 @@ int main() {
         model = glm::mat4(1.0f); // Identity matrix
 
         // Camera position (slightly above and behind the cube)
-        glm::vec3 cameraPosition = glm::vec3(0.0f, 1.0f, -2.0f);
+        glm::vec3 cameraPosition = glm::vec3(-1.0f, 1.0f, -2.0f);
         glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -982,13 +995,21 @@ int main() {
         GLuint projLoc = glGetUniformLocation(shaderProgram, "projection");
         GLuint inputTextureLoc = glGetUniformLocation(shaderProgram, "inputTexture");
         GLuint fluidSizeLoc = glGetUniformLocation(shaderProgram, "fluidSize");
-        GLuint gridSizeLoc = glGetUniformLocation(shaderProgram, "gridSize");
+//        GLuint gridSizeLoc = glGetUniformLocation(shaderProgram, "gridSize");
+        GLuint cameraPosLoc = glGetUniformLocation(shaderProgram, "cameraPos");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
         glUniform1i(inputTextureLoc, 0);
         glUniform1f(fluidSizeLoc, cubeSize);
-        glUniform1i(gridSizeLoc, GRID_SIZE);
+//        glUniform1i(gridSizeLoc, GRID_SIZE);
+        glUniform3fv(cameraPosLoc, 1, glm::value_ptr(cameraPosition));
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+//        glEnable(GL_CULL_FACE);
+//        glCullFace(GL_BACK);
 
 
         // Bind the VAO
@@ -997,6 +1018,9 @@ int main() {
         // Draw the cube
         glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(cubeIndices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
+
+        glDisable(GL_BLEND);
+//        glDisable(GL_CULL_FACE);
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
