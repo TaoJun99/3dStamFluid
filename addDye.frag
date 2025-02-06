@@ -16,7 +16,7 @@ void main() {
     vec4 currentColor = texture(dyeTexture, texCoords);
 
     // Distance of fragment from position where dye is dropped
-    float dist = distance(texCoords, addDyePos);
+    float dist = distance(texCoords, vec3(0.5, 0.5, 0.5));
 
     // Fragment within dyeRadius
     if (addDye && dist < dyeRadius) {

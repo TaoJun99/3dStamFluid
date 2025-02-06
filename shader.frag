@@ -35,19 +35,19 @@ void main() {
 
     // March through the volume
     while(true) {
-        // Convert rayPos to texture coordinates (assuming cube is from [-1,1])
+        // Convert rayPos to texture coordinates (assuming cube is from [-0.5,0.5])
         vec3 texCoords = (rayPos + 0.5);
 
         // Sample the fluid simulation texture
         vec4 sampleColor = texture(inputTexture, texCoords);
 
         // Accumulate color if sample has fluid
-        accumulatedColor += sampleColor * 0.1;
+        accumulatedColor += sampleColor * 0.01;
 
         // Move the ray forward
         rayPos += stepSize;
 
-        // Stop if ray exits the cube (outside [-1,1] range)
+        // Stop if ray exits the cube (outside [-0.5,0.5] range)
         if (any(lessThan(rayPos, vec3(-0.5))) || any(greaterThan(rayPos, vec3(0.5)))) {
             break;
         }

@@ -3,13 +3,15 @@
 uniform sampler3D w; //vector field
 uniform float halfrdx;
 uniform int gridSize;
+uniform float slice;
 
 in vec3 texCoords;
 out vec4 fragColor;
 
 void main() {
 
-    ivec3 texCoordInt = ivec3(texCoords * gridSize);  // Convert normalized to integer coordinates
+//    ivec3 texCoordInt = ivec3(texCoords * gridSize);  // Convert normalized to integer coordinates
+    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
 
     // Fetch neighboring texels
     vec4 wL = texelFetch(w, texCoordInt - ivec3(1, 0, 0), 0);  // Left

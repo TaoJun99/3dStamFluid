@@ -226,8 +226,8 @@ void applyForce(GLFWwindow* window) {
 
     glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 0.3f; // Normalized
-    float forceStrength = 50.0f; // Example strength
+    float forceRadius = 0.1f; // Normalized
+    float forceStrength = 40.0f; // Example strength
 
     std::cout << "Force Position: "
                   << forcePos.x << ", "
@@ -264,7 +264,8 @@ void applyForce(GLFWwindow* window) {
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
         // Bind each slice of the 3D texture
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, velocityTexture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, velocityTexture, 0, slice);
         // Check framebuffer status
 //        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 //            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
@@ -378,7 +379,8 @@ void addDye(GLFWwindow *window, bool click) {
         glUniform1f(sliceLoc, sliceDepth);
 
 
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
 //        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 //            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
 //            break;
@@ -432,7 +434,9 @@ void applyBoundaryConditions(GLuint texture, bool isPressure) {
         float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, texture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, texture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, texture, 0, slice);
+
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
@@ -488,7 +492,8 @@ void advect(GLuint texture) {
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
 //        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 //            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
 //            break;
@@ -505,9 +510,9 @@ void advect(GLuint texture) {
 
     copyTexture(outputTexture, texture);
 
-    if (texture == velocityTexture) {
+//    if (texture == velocityTexture) {
         applyBoundaryConditions(texture, false);
-    }
+//    }
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
@@ -532,7 +537,8 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
         float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
         glUniform1f(sliceLoc, sliceDepth);
 
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, jacobiTexture1, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, jacobiTexture1, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, jacobiTexture1, 0, slice);
         if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
             std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
             break;
@@ -564,13 +570,15 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
             if (i % 2 == 0) { // Multiple of 2 - input: jacobiTexture1, output: jacobiTexture2
                 currTexture = jacobiTexture2;
                 // Bind output texture to framebuffer
-                glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, currTexture, 0, slice);
+                glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, currTexture, 0, slice);
+//                glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, currTexture, 0, slice);
                 // Input texture
                 glUniform1i(xLoc, 3);
             } else {// input: jacobiTexture2, output: jacobiTexture1
                 currTexture = jacobiTexture1;
                 // Bind output texture to framebuffer
-                glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, currTexture, 0, slice);
+                glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, currTexture, 0, slice);
+//                glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, currTexture, 0, slice);
                 // Input texture
                 glUniform1i(xLoc, 4);
             }
@@ -655,7 +663,8 @@ void divergence(GLuint divergenceTexture) {
         glUniform1f(sliceLoc, sliceDepth);
 
 //        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, divergenceTexture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, divergenceTexture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, divergenceTexture, 0, slice);
 //        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 //            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
 //            break;
@@ -696,7 +705,8 @@ void subtractGradient() {
         glUniform1f(sliceLoc, sliceDepth);
 
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, outputTexture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
 //        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
 //            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
 //            break;
