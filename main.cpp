@@ -885,8 +885,8 @@ int main() {
                 int index = k * GRID_SIZE * GRID_SIZE + j * GRID_SIZE + i;
                 // You can modify the values here if needed
                 colorData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
-                colorData[index * 4 + 1] = 0.5f; // G component
-                colorData[index * 4 + 2] = 0.5f; // B component
+                colorData[index * 4 + 1] = 0.0f; // G component
+                colorData[index * 4 + 2] = 0.0f; // B component
                 colorData[index * 4 + 3] = 1.0f; // A component
             }
         }
