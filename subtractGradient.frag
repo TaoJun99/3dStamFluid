@@ -5,28 +5,31 @@ uniform sampler3D w; // velocity
 uniform float halfrdx;
 uniform int gridSize;
 uniform float slice;
-
+uniform sampler3D levelSetTexture;
 
 in vec3 texCoords;
 out vec4 fragColor;
 
-bool isSolidCell(ivec3 cellIndex) {
-    if (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
+bool isSolidOrAirCell(ivec3 cellIndex) {
+    return (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
     cellIndex.y <= 0 || cellIndex.y >= gridSize - 1 ||
-    cellIndex.z <= 0 || cellIndex.z >= gridSize - 1) {
-        return true;
-    } else {
-        return false;
-    }
+    cellIndex.z <= 0 || cellIndex.z >= gridSize - 1);
 }
 
 
 void main() {
+//    float phi = texture(levelSetTexture, texCoords).x;
+//
+//    if (phi > 0.0) {
+//        fragColor = texture(w, texCoords);
+//        return;
+//    }
+
 //    ivec3 texCoordInt = ivec3(texCoords * gridSize);
     ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
 
     // Current cell is boundary - set velocity = 0
-    if (isSolidCell(texCoordInt)) {
+    if (isSolidOrAirCell(texCoordInt)) {
         fragColor = vec4(0.0, 0.0, 0.0, 0.0);
     } else {
         float pC = texelFetch(p, texCoordInt, 0).x; // Center
@@ -39,22 +42,22 @@ void main() {
         float pF = texelFetch(p, texCoordInt + ivec3(0, 0, 1), 0).x;  // Front
 
         // Check if neighbouring cells are boundary/solid cells
-        if (isSolidCell(texCoordInt - ivec3(1, 0, 0))) {
+        if (isSolidOrAirCell(texCoordInt - ivec3(1, 0, 0))) {
             pL = pC;
         }
-        if (isSolidCell(texCoordInt + ivec3(1, 0, 0))) {
+        if (isSolidOrAirCell(texCoordInt + ivec3(1, 0, 0))) {
             pR = pC;
         }
-        if (isSolidCell(texCoordInt - ivec3(0, 1, 0))) {
+        if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
             pD = pC;
         }
-        if (isSolidCell(texCoordInt + ivec3(0, 1, 0))) {
+        if (isSolidOrAirCell(texCoordInt + ivec3(0, 1, 0))) {
             pU = pC;
         }
-        if (isSolidCell(texCoordInt + ivec3(0, 0, 1))) {
+        if (isSolidOrAirCell(texCoordInt + ivec3(0, 0, 1))) {
             pF = pC;
         }
-        if (isSolidCell(texCoordInt - ivec3(0, 1, 0))) {
+        if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
             pB = pC;
         }
 

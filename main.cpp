@@ -11,7 +11,7 @@
 
 const int GRID_SIZE = 64;
 
-GLuint dyeTexture;
+GLuint levelSetTexture;
 GLuint velocityTexture;
 GLuint pressureTexture;
 GLuint jacobiTexture1;
@@ -28,6 +28,7 @@ GLuint jacobiShaderProgram;
 GLuint divergenceShaderProgram;
 GLuint gradientSubtractShaderProgram;
 GLuint boundaryShaderProgram;
+GLuint levelSetInitShaderProgram;
 
 float cubeSize = 1.0f;
 
@@ -152,6 +153,40 @@ void generateCubeVertices(std::vector<float>& vertices, float size) {
     };
 }
 
+void levelSetInit() {
+    glUseProgram(levelSetInitShaderProgram);
+
+    GLuint waterHeightLoc = glGetUniformLocation(levelSetInitShaderProgram, "waterHeight");
+    GLuint sliceLoc = glGetUniformLocation(levelSetInitShaderProgram, "slice");
+
+    glUniform1f(waterHeightLoc, 0.6);
+
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, levelSetTexture, 0, slice);
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+    }
+
+
+    glViewport(0, 0, viewportWidth, viewportHeight);
+    // Unbind the framebuffer and texture
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 void getMouseNDC(GLFWwindow* window, glm::vec2& mouseNDC) {
     // Window coordinates
     double mouseX, mouseY;
@@ -226,7 +261,7 @@ void applyForce(GLFWwindow* window) {
         return;
     }
 
-    glm::vec3 forceDir = glm::vec3(0.0, 1.0, 0.0);
+    glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
     float forceRadius = 0.2f; // Normalized
     float forceStrength = 30.0f; // Example strength
@@ -246,12 +281,14 @@ void applyForce(GLFWwindow* window) {
     GLuint forceStrengthLoc = glGetUniformLocation(applyForceShaderProgram, "forceStrength");
     GLuint velocityTextureLoc = glGetUniformLocation(applyForceShaderProgram, "velocityTexture");
     GLuint sliceLoc = glGetUniformLocation(applyForceShaderProgram, "slice");
+    GLuint levelSetTextureLoc = glGetUniformLocation(applyForceShaderProgram, "levelSetTexture");
 
     glUniform3fv(forceApplyPosLoc, 1, glm::value_ptr(forcePos));
     glUniform3fv(forceDirLoc, 1, glm::value_ptr(forceDir));
     glUniform1f(forceRadiusLoc, forceRadius);
     glUniform1f(forceStrengthLoc, forceStrength);
     glUniform1i(velocityTextureLoc, 1);
+    glUniform1i(levelSetTextureLoc, 0);
 
     // Bind the 3D texture as the framebuffer target
     glActiveTexture(GL_TEXTURE1);
@@ -355,7 +392,7 @@ void addDye(GLFWwindow *window, bool click) {
 
     glUseProgram(addDyeShaderProgram);
 
-    GLuint dyeTextureLoc = glGetUniformLocation(addDyeShaderProgram, "dyeTexture");
+    GLuint dyeTextureLoc = glGetUniformLocation(addDyeShaderProgram, "levelSetTexture");
     GLuint addDyePosLoc = glGetUniformLocation(addDyeShaderProgram, "addDyePos");
     GLuint dyeRadiusLoc = glGetUniformLocation(addDyeShaderProgram, "dyeRadius");
     GLuint dyeColorLoc = glGetUniformLocation(addDyeShaderProgram, "dyeColor");
@@ -395,7 +432,7 @@ void addDye(GLFWwindow *window, bool click) {
 
     }
 
-    copyTexture(outputTexture, dyeTexture);
+    copyTexture(outputTexture, levelSetTexture);
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
@@ -418,7 +455,7 @@ void applyBoundaryConditions(GLuint texture, bool isPressure) {
         glUniform1f(scaleLoc, -1.0);
     }
 
-    if (texture == dyeTexture) {
+    if (texture == levelSetTexture) {
         glUniform1i(textureLoc, 0);
     } else if (texture == velocityTexture) {
         glUniform1i(textureLoc, 1);
@@ -464,7 +501,7 @@ void advect(GLuint texture) {
 
     // Bind the velocity and dye textures
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_3D, dyeTexture);
+    glBindTexture(GL_TEXTURE_3D, levelSetTexture);
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_3D, velocityTexture);
@@ -481,7 +518,7 @@ void advect(GLuint texture) {
     glUniform1i(velocityTextureLoc, 1);
 
 
-    if (texture == dyeTexture) {
+    if (texture == levelSetTexture) {
         glUniform1i(advectedTextureLoc, 0);
     } else if (texture == velocityTexture) {
         glUniform1i(advectedTextureLoc, 1);
@@ -625,6 +662,7 @@ void diffuse(GLuint texture) {
     GLuint bLoc = glGetUniformLocation(jacobiShaderProgram, "b");
     GLuint gridSizeLoc = glGetUniformLocation(jacobiShaderProgram, "gridSize");
     GLuint sliceLoc = glGetUniformLocation(jacobiShaderProgram, "slice");
+    GLuint levelSetTextureLoc = glGetUniformLocation(jacobiShaderProgram, "levelSetTexture");
 
     float dx = 1.0 / GRID_SIZE;
     float nu = 0.0002;
@@ -633,10 +671,11 @@ void diffuse(GLuint texture) {
     glUniform1f(alphaLoc, alpha);
     glUniform1f(rBetaLoc, 1.0f / (6.0f + alpha));
     glUniform1i(gridSizeLoc, GRID_SIZE);
+    glUniform1i(levelSetTextureLoc, 0);
 
-    if (texture == dyeTexture) {
+    if (texture == levelSetTexture) {
         glUniform1i(bLoc, 0);
-//        jacobi(dyeTexture, xLoc, sliceLoc);
+//        jacobi(levelSetTexture, xLoc, sliceLoc);
     } else if (texture == velocityTexture) {
         glUniform1i(bLoc, 1);
         jacobi(velocityTexture, xLoc, sliceLoc);
@@ -692,11 +731,13 @@ void subtractGradient() {
     GLuint halfrdxLoc = glGetUniformLocation(gradientSubtractShaderProgram, "halfrdx");
     GLuint gridSizeLoc = glGetUniformLocation(gradientSubtractShaderProgram, "gridSize");
     GLuint sliceLoc = glGetUniformLocation(gradientSubtractShaderProgram, "slice");
+    GLuint levelSetTextureLoc = glGetUniformLocation(gradientSubtractShaderProgram, "levelSetTexture");
 
     glUniform1i(pLoc, 2);
     glUniform1i(wLoc, 1);
     glUniform1f(halfrdxLoc, 1.0 / (2.0  * GRID_SIZE));
     glUniform1i(gridSizeLoc, GRID_SIZE);
+    glUniform1i(levelSetTextureLoc, 0);
 
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
 
@@ -753,6 +794,7 @@ void project() {
     GLuint bLoc = glGetUniformLocation(jacobiShaderProgram, "b");
     GLuint gridSizeLoc = glGetUniformLocation(jacobiShaderProgram, "gridSize");
     GLuint sliceLoc = glGetUniformLocation(jacobiShaderProgram, "slice");
+    GLuint levelSetTextureLoc = glGetUniformLocation(jacobiShaderProgram, "levelSetTexture");
 
     float dx = GRID_SIZE;
     float alpha = -(dx * dx);
@@ -762,6 +804,7 @@ void project() {
     glUniform1f(rBetaLoc, rBeta);
     glUniform1i(bLoc, 6); // divergence of w
     glUniform1i(gridSizeLoc, GRID_SIZE);
+    glUniform1i(levelSetTextureLoc, 0);
 
     // Solve for pressure field
     jacobi(pressureTexture, xLoc, sliceLoc);
@@ -801,6 +844,7 @@ int main() {
     divergenceShaderProgram = createShaderProgram("../quadShader.vert", "../divergence.frag");
     gradientSubtractShaderProgram = createShaderProgram("../quadShader.vert", "../subtractGradient.frag");
     boundaryShaderProgram = createShaderProgram("../quadShader.vert", "../boundary.frag");
+    levelSetInitShaderProgram = createShaderProgram("../quadShader.vert", "../levelSetInit.frag");
 
 
     std::vector<float> cubeVertices;
@@ -815,9 +859,6 @@ int main() {
             16, 17, 18, 18, 19, 16, // Bottom face
             20, 21, 22, 22, 23, 20  // Top face
     };
-
-    std::vector<float> waterVertices;
-    generateCubeVertices(waterVertices, 0.8);
 
     std::vector<unsigned int> waterIndices = {
             0, 1, 2, 2, 3, 0,       // Front face
@@ -896,8 +937,8 @@ int main() {
 
 
     glActiveTexture(GL_TEXTURE0);
-    glGenTextures(1, &dyeTexture);
-    glBindTexture(GL_TEXTURE_3D, dyeTexture);
+    glGenTextures(1, &levelSetTexture);
+    glBindTexture(GL_TEXTURE_3D, levelSetTexture);
     glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA32F, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RGBA, GL_FLOAT, colorData.data());
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -962,26 +1003,29 @@ int main() {
     viewportWidth = viewport[2];
     viewportHeight = viewport[3];
 
+    levelSetInit();
+
     // Render loop
     while (!glfwWindowShouldClose(window)) {
         // Clear the screen
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-            addDye(window, true);
-        } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
-            addDye(window, false);
-        }
+//        if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+//            addDye(window, true);
+//        } else if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_RELEASE) {
+//            addDye(window, false);
+//        }
 
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             applyForce(window);
         }
 
         advect(velocityTexture);
-        advect(dyeTexture);
+        advect(levelSetTexture);
+//        levelSetInit();
 
         diffuse(velocityTexture);
-        // diffuse(dyeTexture);
+        // diffuse(levelSetTexture);
 
          project();
 
@@ -1040,7 +1084,7 @@ int main() {
     }
 
     // Cleanup
-    glDeleteTextures(1, &dyeTexture);
+    glDeleteTextures(1, &levelSetTexture);
     glDeleteTextures(1, &velocityTexture);
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);

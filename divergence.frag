@@ -4,24 +4,29 @@ uniform sampler3D w; //vector field (velocity)
 uniform float halfrdx;
 uniform int gridSize;
 uniform float slice;
+uniform sampler3D levelSetTexture;
 
 in vec3 texCoords;
 out vec4 fragColor;
 
 
-bool isSolidCell(ivec3 cellIndex) {
-    if (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
+bool isSolidOrAirCell(ivec3 cellIndex) {
+    return (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
     cellIndex.y <= 0 || cellIndex.y >= gridSize - 1 ||
-    cellIndex.z <= 0 || cellIndex.z >= gridSize - 1) {
-        return true;
-    } else {
-        return false;
-    }
+    cellIndex.z <= 0 || cellIndex.z >= gridSize - 1 ||
+    texelFetch(levelSetTexture, cellIndex, 0).x > 0.0);
 }
 
 
-
 void main() {
+    float phi = texture(levelSetTexture, texCoords).x;
+
+    if (phi > 0.0) {
+        fragColor = texture(w, texCoords);
+        return;
+    }
+
+
     ivec3 texCoordInt = ivec3(texCoords * gridSize);  // Convert normalized to integer coordinates
 //    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
 
@@ -34,22 +39,22 @@ void main() {
     vec4 wB = texelFetch(w, texCoordInt - ivec3(0, 0, 1), 0);  // Back
 
     // Check if neighbouring cells are boundary/solid cells
-    if (isSolidCell(texCoordInt - ivec3(1, 0, 0))) {
+    if (isSolidOrAirCell(texCoordInt - ivec3(1, 0, 0))) {
         wL = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    if (isSolidCell(texCoordInt + ivec3(1, 0, 0))) {
+    if (isSolidOrAirCell(texCoordInt + ivec3(1, 0, 0))) {
         wR = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    if (isSolidCell(texCoordInt - ivec3(0, 1, 0))) {
+    if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
         wD = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    if (isSolidCell(texCoordInt + ivec3(0, 1, 0))) {
+    if (isSolidOrAirCell(texCoordInt + ivec3(0, 1, 0))) {
         wU = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    if (isSolidCell(texCoordInt + ivec3(0, 0, 1))) {
+    if (isSolidOrAirCell(texCoordInt + ivec3(0, 0, 1))) {
         wF = vec4(0.0, 0.0, 0.0, 0.0);
     }
-    if (isSolidCell(texCoordInt - ivec3(0, 1, 0))) {
+    if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
         wB = vec4(0.0, 0.0, 0.0, 0.0);
     }
 
