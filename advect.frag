@@ -16,14 +16,6 @@ void main() {
     newX = clamp(newX, vec3(0.0), vec3(1.0));
 
     vec4 advectedValue = texture(advectedTexture, newX);
-//    if (isAdvectDye) {
-//        advectedValue = texture(dyeTexture, newX);
-//    } else {
-//        advectedValue = texture(velocityTexture, newX);
-//    }
-
-
-
     fragColor = advectedValue;
 
 

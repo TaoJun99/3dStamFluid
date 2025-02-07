@@ -213,21 +213,23 @@ glm::vec3 computeForcePosition(const glm::vec2& mouseNDC) {
 
 
 void applyForce(GLFWwindow* window) {
-    glm::vec2 mouseNDC;
-    getMouseNDC(window, mouseNDC);
+//    glm::vec2 mouseNDC;
+//    getMouseNDC(window, mouseNDC);
 
     // World space
-    glm::vec3 forcePos = computeForcePosition(mouseNDC);
+//    glm::vec3 forcePos = computeForcePosition(mouseNDC);
+    glm::vec3 forcePos = glm::vec3(0.5, 0.5, 0.5);
+
 
     // No intersection with top face
     if (forcePos == glm::vec3(-1, -1, -1)) {
         return;
     }
 
-    glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
+    glm::vec3 forceDir = glm::vec3(0.0, 1.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 0.1f; // Normalized
-    float forceStrength = 40.0f; // Example strength
+    float forceRadius = 0.2f; // Normalized
+    float forceStrength = 30.0f; // Example strength
 
     std::cout << "Force Position: "
                   << forcePos.x << ", "
@@ -402,7 +404,7 @@ void addDye(GLFWwindow *window, bool click) {
 }
 
 void applyBoundaryConditions(GLuint texture, bool isPressure) {
-
+    return;
     glUseProgram(boundaryShaderProgram);
 
     GLuint scaleLoc = glGetUniformLocation(boundaryShaderProgram, "scale");
@@ -510,9 +512,9 @@ void advect(GLuint texture) {
 
     copyTexture(outputTexture, texture);
 
-//    if (texture == velocityTexture) {
-        applyBoundaryConditions(texture, false);
-//    }
+
+//    applyBoundaryConditions(texture, false);
+
 
 
     glViewport(0, 0, viewportWidth, viewportHeight);
@@ -552,11 +554,11 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
         glBindVertexArray(0);
     }
 
-    if (outputTexture == velocityTexture) {
-        applyBoundaryConditions(jacobiTexture1, false);
-    } else if (outputTexture == pressureTexture) {
-        applyBoundaryConditions(jacobiTexture1, true);
-    }
+//    if (outputTexture == velocityTexture) {
+//        applyBoundaryConditions(jacobiTexture1, false);
+//    } else if (outputTexture == pressureTexture) {
+//        applyBoundaryConditions(jacobiTexture1, true);
+//    }
 
     int NO_OF_ITERATIONS = 10;
     GLuint currTexture; //texture to write to
@@ -597,11 +599,11 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
 
 
 
-        if (outputTexture == velocityTexture) {
-            applyBoundaryConditions(currTexture, false);
-        } else if (outputTexture == pressureTexture) {
-            applyBoundaryConditions(currTexture, true);
-        }
+//        if (outputTexture == velocityTexture) {
+//            applyBoundaryConditions(currTexture, false);
+//        } else if (outputTexture == pressureTexture) {
+//            applyBoundaryConditions(currTexture, true);
+//        }
 
     }
 
@@ -721,7 +723,7 @@ void subtractGradient() {
 
     copyTexture(outputTexture, velocityTexture);
 
-    applyBoundaryConditions(velocityTexture, false);
+//    applyBoundaryConditions(velocityTexture, false);
 
     glViewport(0, 0, viewportWidth, viewportHeight);
 
@@ -885,8 +887,8 @@ int main() {
                 int index = k * GRID_SIZE * GRID_SIZE + j * GRID_SIZE + i;
                 // You can modify the values here if needed
                 colorData[index * 4 + 0] = 0.0f; // Set R to 1.0f, for example
-                colorData[index * 4 + 1] = 0.0f; // G component
-                colorData[index * 4 + 2] = 0.0f; // B component
+                colorData[index * 4 + 1] = 0.5f; // G component
+                colorData[index * 4 + 2] = 0.5f; // B component
                 colorData[index * 4 + 3] = 1.0f; // A component
             }
         }

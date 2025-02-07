@@ -14,14 +14,13 @@ void main() {
 //    vec3 texCoord_3d = vec3(texCoords, slice);
 
 //     Calculate distance from position where force is applied
-    float distance = length(texCoords - vec3(0.5, 0.3, 0.5));
+    float distance = length(texCoords - forceApplyPos);
 
 //     Apply force within the radius
     if (distance < forceRadius) {
         float influence = exp(-distance * distance / (2.0 * forceRadius * forceRadius));
         vec3 currentVelocity = texture(velocityTexture, texCoords).xyz;
-//        vec3 newVelocity = currentVelocity + influence * normalize(texCoords - forceApplyPos) * forceStrength;
-        vec3 newVelocity = currentVelocity + influence * vec3(0.0, 1.0, 0.0) * forceStrength;
+        vec3 newVelocity = currentVelocity + influence * forceDir * forceStrength;
 
         fragColor = vec4(newVelocity, 1.0);
     } else {
