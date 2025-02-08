@@ -14,7 +14,7 @@ bool isSolidOrAirCell(ivec3 cellIndex) {
     return (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
     cellIndex.y <= 0 || cellIndex.y >= gridSize - 1 ||
     cellIndex.z <= 0 || cellIndex.z >= gridSize - 1 ||
-    texelFetch(levelSetTexture, cellIndex, 0).x > 0.0);
+    texelFetch(levelSetTexture, cellIndex, 0).x > 0);
 }
 
 
@@ -22,7 +22,7 @@ void main() {
     float phi = texture(levelSetTexture, texCoords).x;
 
     if (phi > 0.0) {
-        fragColor = texture(w, texCoords);
+        fragColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
 

@@ -7,6 +7,7 @@ uniform sampler3D b;
 uniform int gridSize;
 uniform float slice;
 uniform sampler3D levelSetTexture;
+uniform bool isPressure;
 
 in vec3 texCoords;
 
@@ -16,16 +17,28 @@ bool isSolidOrAirCell(ivec3 cellIndex) {
     return (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
     cellIndex.y <= 0 || cellIndex.y >= gridSize - 1 ||
     cellIndex.z <= 0 || cellIndex.z >= gridSize - 1 ||
-    texelFetch(levelSetTexture, cellIndex, 0).x > 0.0);
+    texelFetch(levelSetTexture, cellIndex, 0).x > 0);
+}
+
+
+bool isAirCell(ivec3 cellIndex) {
+    return texelFetch(levelSetTexture, cellIndex, 0).x > 0;
 }
 
 
 void main() {
+    // Current cell
     float phi = texture(levelSetTexture, texCoords).x;
 
-    if (phi > 0.0) {
-        fragColor = texture(x, texCoords);
-        return;
+    if (phi > 0.0) { // Air cell
+        if (isPressure) { // Pressure: set to zero
+            fragColor = vec4(0.0, 0.0, 0.0, 0.0);
+            return;
+        } else { // Velocity: remain unchanged
+            fragColor = texture(x, texCoords);
+            return;
+        }
+
     }
 
     // 1 Jacobi update iteration
@@ -62,6 +75,29 @@ void main() {
     if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
         xB = xC;
     }
+
+
+    if (isPressure) { // Air cell should have zero pressure
+        if (isAirCell(texCoordInt - ivec3(1, 0, 0))) {
+            xL = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+        if (isAirCell(texCoordInt + ivec3(1, 0, 0))) {
+            xR = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+        if (isAirCell(texCoordInt - ivec3(0, 1, 0))) {
+            xD = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+        if (isAirCell(texCoordInt + ivec3(0, 1, 0))) {
+            xU = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+        if (isAirCell(texCoordInt + ivec3(0, 0, 1))) {
+            xF = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+        if (isAirCell(texCoordInt - ivec3(0, 1, 0))) {
+            xB = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+    }
+
 
     fragColor = (xL + xR + xD + xU + xF + xB + alpha * bC) * rBeta;
 }

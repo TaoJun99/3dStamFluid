@@ -29,6 +29,7 @@ GLuint divergenceShaderProgram;
 GLuint gradientSubtractShaderProgram;
 GLuint boundaryShaderProgram;
 GLuint levelSetInitShaderProgram;
+GLuint zeroAirCellPressureShaderProgram;
 
 float cubeSize = 1.0f;
 
@@ -261,15 +262,15 @@ void applyForce(GLFWwindow* window) {
         return;
     }
 
-    glm::vec3 forceDir = glm::vec3(1.0, 0.0, 0.0);
+    glm::vec3 forceDir = glm::vec3(0.0, 1.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 0.2f; // Normalized
+    float forceRadius = 0.4f; // Normalized
     float forceStrength = 30.0f; // Example strength
 
-    std::cout << "Force Position: "
-                  << forcePos.x << ", "
-                  << forcePos.y << ", "
-                  << forcePos.z << std::endl;
+//    std::cout << "Force Position: "
+//                  << forcePos.x << ", "
+//                  << forcePos.y << ", "
+//                  << forcePos.z << std::endl;
 
     // Use the applyForceShaderProgram
     glUseProgram(applyForceShaderProgram);
@@ -663,6 +664,7 @@ void diffuse(GLuint texture) {
     GLuint gridSizeLoc = glGetUniformLocation(jacobiShaderProgram, "gridSize");
     GLuint sliceLoc = glGetUniformLocation(jacobiShaderProgram, "slice");
     GLuint levelSetTextureLoc = glGetUniformLocation(jacobiShaderProgram, "levelSetTexture");
+    GLuint isPressureLoc = glGetUniformLocation(jacobiShaderProgram, "isPressure");
 
     float dx = 1.0 / GRID_SIZE;
     float nu = 0.0002;
@@ -672,6 +674,7 @@ void diffuse(GLuint texture) {
     glUniform1f(rBetaLoc, 1.0f / (6.0f + alpha));
     glUniform1i(gridSizeLoc, GRID_SIZE);
     glUniform1i(levelSetTextureLoc, 0);
+    glUniform1i(isPressureLoc, 0);
 
     if (texture == levelSetTexture) {
         glUniform1i(bLoc, 0);
@@ -771,6 +774,43 @@ void subtractGradient() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void zeroAirCellPressure() {
+    glUseProgram(zeroAirCellPressureShaderProgram);
+
+    GLuint pressureTextureLoc = glGetUniformLocation(zeroAirCellPressureShaderProgram, "pressureTexture");
+    GLuint levelSetTextureLoc = glGetUniformLocation(zeroAirCellPressureShaderProgram, "levelSetTexture");
+    GLuint sliceLoc = glGetUniformLocation(zeroAirCellPressureShaderProgram, "slice");
+
+    glUniform1i(pressureTextureLoc, 2);
+    glUniform1i(levelSetTextureLoc, 0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    glViewport(0, 0, GRID_SIZE, GRID_SIZE);
+
+    for (int slice = 0; slice < GRID_SIZE; slice++) {
+        float sliceDepth = (float) (slice + 0.5f) / GRID_SIZE;
+        glUniform1f(sliceLoc, sliceDepth);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, pressureTexture, 0, slice);
+//        glFramebufferTexture3D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_3D, outputTexture, 0, slice);
+//        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+//            std::cerr << "Framebuffer is not complete for slice " << slice << std::endl;
+//            break;
+//        }
+
+        // Render a full-screen quad to update the texture slice
+        glBindVertexArray(quadVAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+        glViewport(0, 0, viewportWidth, viewportHeight);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+}
+
 void project() {
     // Divergence of intermediate velocity field w
     GLuint divergenceTexture;
@@ -795,6 +835,7 @@ void project() {
     GLuint gridSizeLoc = glGetUniformLocation(jacobiShaderProgram, "gridSize");
     GLuint sliceLoc = glGetUniformLocation(jacobiShaderProgram, "slice");
     GLuint levelSetTextureLoc = glGetUniformLocation(jacobiShaderProgram, "levelSetTexture");
+    GLuint isPressureLoc = glGetUniformLocation(jacobiShaderProgram, "isPressure");
 
     float dx = GRID_SIZE;
     float alpha = -(dx * dx);
@@ -805,7 +846,9 @@ void project() {
     glUniform1i(bLoc, 6); // divergence of w
     glUniform1i(gridSizeLoc, GRID_SIZE);
     glUniform1i(levelSetTextureLoc, 0);
+    glUniform1i(isPressureLoc, 1);
 
+//    zeroAirCellPressure();
     // Solve for pressure field
     jacobi(pressureTexture, xLoc, sliceLoc);
 
@@ -845,6 +888,7 @@ int main() {
     gradientSubtractShaderProgram = createShaderProgram("../quadShader.vert", "../subtractGradient.frag");
     boundaryShaderProgram = createShaderProgram("../quadShader.vert", "../boundary.frag");
     levelSetInitShaderProgram = createShaderProgram("../quadShader.vert", "../levelSetInit.frag");
+    zeroAirCellPressureShaderProgram = createShaderProgram("../quadShader.vert", "../zeroAirCellPressure.frag");
 
 
     std::vector<float> cubeVertices;
@@ -1020,12 +1064,10 @@ int main() {
             applyForce(window);
         }
 
-        advect(velocityTexture);
         advect(levelSetTexture);
-//        levelSetInit();
+        advect(velocityTexture);
 
         diffuse(velocityTexture);
-        // diffuse(levelSetTexture);
 
          project();
 
@@ -1053,10 +1095,12 @@ int main() {
         GLuint fluidSizeLoc = glGetUniformLocation(shaderProgram, "fluidSize");
 //        GLuint gridSizeLoc = glGetUniformLocation(shaderProgram, "gridSize");
         GLuint cameraPosLoc = glGetUniformLocation(shaderProgram, "cameraPos");
+        GLuint levelSetTextureLoc = glGetUniformLocation(shaderProgram, "levelSetTexture");
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
         glUniform1i(inputTextureLoc, 0);
+        glUniform1i(levelSetTextureLoc, 0);
         glUniform1f(fluidSizeLoc, cubeSize);
 //        glUniform1i(gridSizeLoc, GRID_SIZE);
         glUniform3fv(cameraPosLoc, 1, glm::value_ptr(cameraPosition));

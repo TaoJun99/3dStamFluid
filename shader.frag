@@ -2,8 +2,10 @@
 out vec4 fragColor;
 
 in vec3 fragPos;
+//in vec3 texCoords;
 
 uniform sampler3D inputTexture;
+uniform sampler3D levelSetTexture;
 uniform vec3 cameraPos;
 
 void main() {
@@ -15,11 +17,12 @@ void main() {
 
     for (int i = 0; i < 256; i++) {
         vec3 texCoords = (rayPos + 0.5);
-        float phi = texture(inputTexture, texCoords).x;
+        float phi = texture(levelSetTexture, texCoords).x;
 
         if (phi <= 0.0) {  // Inside water
             vec4 waterColor = vec4(0.2, 0.4, 1.0, 1.0);// Blue water color
             accumulatedColor += waterColor * 0.02;
+//            accumulatedColor += texture(inputTexture, texCoords) * 0.02;
 
         }
 
@@ -32,4 +35,7 @@ void main() {
     }
 
     fragColor = accumulatedColor;
+
+
+
 }

@@ -10,10 +10,14 @@ uniform sampler3D levelSetTexture;
 in vec3 texCoords;
 out vec4 fragColor;
 
-bool isSolidOrAirCell(ivec3 cellIndex) {
+bool isSolidCell(ivec3 cellIndex) {
     return (cellIndex.x <= 0 || cellIndex.x >= gridSize - 1 ||
     cellIndex.y <= 0 || cellIndex.y >= gridSize - 1 ||
     cellIndex.z <= 0 || cellIndex.z >= gridSize - 1);
+}
+
+bool isAirCell(ivec3 cellIndex) {
+    return texelFetch(levelSetTexture, cellIndex, 0).x > 0;
 }
 
 
@@ -29,7 +33,7 @@ void main() {
     ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
 
     // Current cell is boundary - set velocity = 0
-    if (isSolidOrAirCell(texCoordInt)) {
+    if (isSolidCell(texCoordInt)) {
         fragColor = vec4(0.0, 0.0, 0.0, 0.0);
     } else {
         float pC = texelFetch(p, texCoordInt, 0).x; // Center
@@ -42,23 +46,43 @@ void main() {
         float pF = texelFetch(p, texCoordInt + ivec3(0, 0, 1), 0).x;  // Front
 
         // Check if neighbouring cells are boundary/solid cells
-        if (isSolidOrAirCell(texCoordInt - ivec3(1, 0, 0))) {
+        if (isSolidCell(texCoordInt - ivec3(1, 0, 0))) {
             pL = pC;
         }
-        if (isSolidOrAirCell(texCoordInt + ivec3(1, 0, 0))) {
+        if (isSolidCell(texCoordInt + ivec3(1, 0, 0))) {
             pR = pC;
         }
-        if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
+        if (isSolidCell(texCoordInt - ivec3(0, 1, 0))) {
             pD = pC;
         }
-        if (isSolidOrAirCell(texCoordInt + ivec3(0, 1, 0))) {
+        if (isSolidCell(texCoordInt + ivec3(0, 1, 0))) {
             pU = pC;
         }
-        if (isSolidOrAirCell(texCoordInt + ivec3(0, 0, 1))) {
+        if (isSolidCell(texCoordInt + ivec3(0, 0, 1))) {
             pF = pC;
         }
-        if (isSolidOrAirCell(texCoordInt - ivec3(0, 1, 0))) {
+        if (isSolidCell(texCoordInt - ivec3(0, 1, 0))) {
             pB = pC;
+        }
+
+        // Check if neighbouring cells are boundary/solid cells
+        if (isAirCell(texCoordInt - ivec3(1, 0, 0))) {
+            pL = 0;
+        }
+        if (isAirCell(texCoordInt + ivec3(1, 0, 0))) {
+            pR = 0;
+        }
+        if (isAirCell(texCoordInt - ivec3(0, 1, 0))) {
+            pD = 0;
+        }
+        if (isAirCell(texCoordInt + ivec3(0, 1, 0))) {
+            pU = 0;
+        }
+        if (isAirCell(texCoordInt + ivec3(0, 0, 1))) {
+            pF = 0;
+        }
+        if (isAirCell(texCoordInt - ivec3(0, 1, 0))) {
+            pB = 0;
         }
 
         fragColor = texelFetch(w, texCoordInt, 0);
