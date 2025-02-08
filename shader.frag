@@ -2,7 +2,7 @@
 out vec4 fragColor;
 
 in vec3 fragPos;
-//in vec3 texCoords;
+in vec3 texCoords;
 
 uniform sampler3D inputTexture;
 uniform sampler3D levelSetTexture;

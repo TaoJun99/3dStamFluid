@@ -3,7 +3,7 @@
 uniform sampler3D w; //vector field (velocity)
 uniform float halfrdx;
 uniform int gridSize;
-uniform float slice;
+uniform int slice;
 uniform sampler3D levelSetTexture;
 
 in vec3 texCoords;
@@ -27,8 +27,8 @@ void main() {
     }
 
 
-    ivec3 texCoordInt = ivec3(texCoords * gridSize);  // Convert normalized to integer coordinates
-//    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
+//    ivec3 texCoordInt = ivec3(texCoords * gridSize);  // Convert normalized to integer coordinates
+    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice);
 
     // Fetch neighboring texels
     vec4 wL = texelFetch(w, texCoordInt - ivec3(1, 0, 0), 0);  // Left

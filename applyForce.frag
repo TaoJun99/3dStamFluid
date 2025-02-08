@@ -9,7 +9,7 @@ uniform vec3 forceApplyPos; // Normalized
 uniform vec3 forceDir;      // Direction of the force
 uniform float forceRadius;  // Radius of the force application
 uniform float forceStrength;
-uniform float slice; //normalized
+uniform int slice; //normalized
 
 void main() {
 //    vec3 texCoord_3d = vec3(texCoords, slice);

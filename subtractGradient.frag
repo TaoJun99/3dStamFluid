@@ -4,7 +4,7 @@ uniform sampler3D p; // pressure field
 uniform sampler3D w; // velocity
 uniform float halfrdx;
 uniform int gridSize;
-uniform float slice;
+uniform int slice;
 uniform sampler3D levelSetTexture;
 
 in vec3 texCoords;
@@ -30,7 +30,7 @@ void main() {
 //    }
 
 //    ivec3 texCoordInt = ivec3(texCoords * gridSize);
-    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
+    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice);
 
     // Current cell is boundary - set velocity = 0
     if (isSolidCell(texCoordInt)) {

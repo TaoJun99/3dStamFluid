@@ -5,7 +5,7 @@ uniform float rBeta;
 uniform sampler3D x;
 uniform sampler3D b;
 uniform int gridSize;
-uniform float slice;
+uniform int slice;
 uniform sampler3D levelSetTexture;
 uniform bool isPressure;
 
@@ -43,7 +43,7 @@ void main() {
 
     // 1 Jacobi update iteration
 //    ivec3 texCoordInt = ivec3(texCoords * gridSize);  // Tex coordinate to grid cell index
-    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice * gridSize);
+    ivec3 texCoordInt = ivec3(texCoords.xy * gridSize, slice);
 
     vec4 xC = texelFetch(x, texCoordInt, 0); // Center
     // Fetch neighboring texels
