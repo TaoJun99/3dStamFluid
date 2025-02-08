@@ -35,7 +35,5 @@ void main() {
     }
 
     fragColor = accumulatedColor;
-
-
-
+    fragColor.a = accumulatedColor.a * 0.5;;
 }

@@ -12,9 +12,6 @@ uniform float forceStrength;
 uniform int slice; //normalized
 
 void main() {
-//    vec3 texCoord_3d = vec3(texCoords, slice);
-
-
     if (texture(levelSetTexture, texCoords).x <= 0) { // Water cell
         //     Calculate distance from position where force is applied
         float distance = length(texCoords - forceApplyPos);
@@ -24,13 +21,15 @@ void main() {
             float influence = exp(-distance * distance / (2.0 * forceRadius * forceRadius));
             vec3 currentVelocity = texture(velocityTexture, texCoords).xyz;
             vec3 newVelocity = currentVelocity + influence * forceDir * forceStrength;
+//            vec3 newVelocity = currentVelocity + influence * normalize(forceApplyPos - forceApplyPos) * forceStrength;
 
             fragColor = vec4(newVelocity, 1.0);
         } else {
             fragColor = texture(velocityTexture, texCoords);
         }
     }  else { // Air cell - velocity set to 0
-        fragColor = vec4(0.0, 0.0, 0.0, 0.0);
+//        fragColor = vec4(0.0, 0.0, 0.0, 0.0);
+        fragColor = texture(velocityTexture, texCoords);
     }
 
 }

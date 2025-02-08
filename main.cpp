@@ -40,7 +40,7 @@ glm::mat4 model;
 glm::mat4 view;
 glm::mat4 projection;
 
-float timeStep = 0.01;
+float timeStep = 0.005;
 
 // Fullscreen Quad Vertices
 float quadVertices[] = {
@@ -160,7 +160,7 @@ void levelSetInit() {
     GLuint waterHeightLoc = glGetUniformLocation(levelSetInitShaderProgram, "waterHeight");
     GLuint sliceLoc = glGetUniformLocation(levelSetInitShaderProgram, "slice");
 
-    glUniform1f(waterHeightLoc, 0.6);
+    glUniform1f(waterHeightLoc, 0.8);
 
     glViewport(0, 0, GRID_SIZE, GRID_SIZE);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -254,7 +254,7 @@ void applyForce(GLFWwindow* window) {
 
     // World space
 //    glm::vec3 forcePos = computeForcePosition(mouseNDC);
-    glm::vec3 forcePos = glm::vec3(0.5, 0.5, 0.5);
+    glm::vec3 forcePos = glm::vec3(0.2, 0.5, 0.2);
 
 
     // No intersection with top face
@@ -262,10 +262,10 @@ void applyForce(GLFWwindow* window) {
         return;
     }
 
-    glm::vec3 forceDir = glm::vec3(0.0, 1.0, 0.0);
+    glm::vec3 forceDir = glm::vec3(1.0, 1.0, 0.0);
 //    glm::vec3 forceDir = -forcePos; // Point towards origin (center of cube)
-    float forceRadius = 0.4f; // Normalized
-    float forceStrength = 30.0f; // Example strength
+    float forceRadius = 0.3f; // Normalized
+    float forceStrength = 40.0f; // Example strength
 
 //    std::cout << "Force Position: "
 //                  << forcePos.x << ", "
@@ -649,7 +649,7 @@ void jacobi(GLuint texture, GLuint xLoc, GLuint sliceLoc) {
 //        applyBoundaryConditions(jacobiTexture1, true);
 //    }
 
-    int NO_OF_ITERATIONS = 10;
+    int NO_OF_ITERATIONS = 20;
     GLuint currTexture; //texture to write to
     for (int i = 0; i < NO_OF_ITERATIONS; i++) {
         glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -718,7 +718,7 @@ void diffuse(GLuint texture) {
     GLuint isPressureLoc = glGetUniformLocation(jacobiShaderProgram, "isPressure");
 
     float dx = 1.0 / GRID_SIZE;
-    float nu = 2;
+    float nu = 10.0;
     float alpha = (dx * dx) / (nu * timeStep);
 
     glUniform1f(alphaLoc, alpha);
@@ -1080,16 +1080,13 @@ int main() {
 
         project();
 
-
-
-
 // Use the shader program
         glUseProgram(shaderProgram);
 
         model = glm::mat4(1.0f); // Identity matrix
 
         // Camera position (slightly above and behind the cube)
-        glm::vec3 cameraPosition = glm::vec3(-1.0f, 1.0f, -2.0f);
+        glm::vec3 cameraPosition = glm::vec3(0.0f, 1.0f, -2.0f);
         glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
         glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
 
